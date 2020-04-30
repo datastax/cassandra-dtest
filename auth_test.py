@@ -1762,7 +1762,7 @@ class TestAuthRoles(Tester):
         self.superuser.execute("REVOKE ALL ON ks.cf FROM mike")
         assert_invalid(self.superuser,
                        "GRANT CREATE ON ks.cf TO MIKE",
-                       "Resource type DataResource does not support any of the requested permissions",
+                       "Resource type DataResource does not support .*the requested permissions.*",
                        SyntaxException)
 
         # GRANT ALL ON ALL ROLES includes SELECT & CREATE on the root level roles resource
@@ -1777,7 +1777,7 @@ class TestAuthRoles(Tester):
         self.superuser.execute("REVOKE ALL ON ALL ROLES FROM mike")
         assert_invalid(self.superuser,
                        "GRANT SELECT ON ALL ROLES TO MIKE",
-                       "Resource type RoleResource does not support any of the requested permissions",
+                       "Resource type RoleResource does not support .*the requested permissions.*",
                        SyntaxException)
 
         # GRANT ALL ON ROLE does not include CREATE (because the role must already be created before the GRANT)
@@ -1789,7 +1789,7 @@ class TestAuthRoles(Tester):
                                        "LIST ALL PERMISSIONS OF mike")
         assert_invalid(self.superuser,
                        "GRANT CREATE ON ROLE role1 TO MIKE",
-                       "Resource type RoleResource does not support any of the requested permissions",
+                       "Resource type RoleResource does not support .*the requested permissions.*",
                        SyntaxException)
         self.superuser.execute("REVOKE ALL ON ROLE role1 FROM mike")
 
@@ -2630,19 +2630,19 @@ class TestAuthRoles(Tester):
 
         # can't grant EXECUTE on data or role resources
         assert_invalid(self.superuser, "GRANT EXECUTE ON ALL KEYSPACES TO mike",
-                       "Resource type DataResource does not support any of the requested permissions",
+                       "Resource type DataResource does not support .*the requested permissions.*",
                        SyntaxException)
         assert_invalid(self.superuser, "GRANT EXECUTE ON KEYSPACE ks TO mike",
-                       "Resource type DataResource does not support any of the requested permissions",
+                       "Resource type DataResource does not support .*the requested permissions.*",
                        SyntaxException)
         assert_invalid(self.superuser, "GRANT EXECUTE ON TABLE ks.t1 TO mike",
-                       "Resource type DataResource does not support any of the requested permissions",
+                       "Resource type DataResource does not support .*the requested permissions.*",
                        SyntaxException)
         assert_invalid(self.superuser, "GRANT EXECUTE ON ALL ROLES TO mike",
-                       "Resource type RoleResource does not support any of the requested permissions",
+                       "Resource type RoleResource does not support .*the requested permissions.*",
                        SyntaxException)
         assert_invalid(self.superuser, "GRANT EXECUTE ON ROLE mike TO role1",
-                       "Resource type RoleResource does not support any of the requested permissions",
+                       "Resource type RoleResource does not support .*the requested permissions.*",
                        SyntaxException)
 
     def test_aggregate_function_permissions(self):
