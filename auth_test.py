@@ -88,6 +88,86 @@ class TestAuth(Tester):
             )
             assert 3 == exclusive_auth_metadata.replication_strategy.replication_factor
 
+    @since('4.0')
+    def test_permissions_invalidation(self):
+        """
+        We send invalidation messages for roles and their permissions when role related
+        information, permissions, role assignments, role options, is changed
+        """
+        self.prepare(nodes=3, config={
+            # huge validity to prevent invalidation based on time
+            'permissions_validity_in_ms': 999999,
+            'roles_validity_in_ms': 999999})
+
+        node1, node2, node3 = self.cluster.nodelist()
+
+        cassandra = self.patient_exclusive_cql_connection(node1, user='cassandra', password='cassandra')
+        cassandra.execute("CREATE USER cathy WITH PASSWORD '12345'")
+        cassandra.execute("CREATE KEYSPACE ks WITH replication = {'class':'SimpleStrategy', 'replication_factor':1}")
+        cassandra.execute("CREATE TABLE ks.cf (id int primary key, val int)")
+        cassandra.execute("CREATE TABLE ks.cf2 (id int primary key, val int)")
+        cassandra.execute("CREATE TABLE ks.cf3 (id int primary key, val int)")
+        cassandra.execute("CREATE ROLE role1")
+        cassandra.execute("CREATE ROLE role2")
+        cassandra.cluster.refresh_schema_metadata()
+
+        # Verify that role permissions invalidation works (i.e. appears to be "immediate").
+        # 1. Let 'cathy' execute a query - permissions are then fetched into the permissions cache. Query fails (unauthorized).
+        # 2. Immediately let 'cassandra' grant SELECT permission to 'cathy' - INVALIDATION verb is broadcasted
+        # 3. Let 'cathy' execute the query again - permissions should have been invalidated and query should therefore succeed
+
+        cathy = self.patient_exclusive_cql_connection(node2, user='cathy', password='12345')
+        assert_unauthorized(cathy, "SELECT * FROM ks.cf",
+                            "User cathy has no SELECT permission on <table ks.cf> or any of its parents")
+
+        cassandra.execute("GRANT SELECT ON TABLE ks.cf TO cathy")
+        self._verify_permission_changes_are_propagated(cathy, "SELECT * FROM ks.cf")
+
+        # Same test as above, but for permission granted to transitive role
+
+        cassandra.execute("GRANT role1 TO cathy")
+
+        cathy = self.patient_exclusive_cql_connection(node2, user='cathy', password='12345')
+        assert_unauthorized(cathy, "SELECT * FROM ks.cf2",
+                            "User cathy has no SELECT permission on <table ks.cf2> or any of its parents")
+
+        cassandra.execute("GRANT SELECT ON TABLE ks.cf2 TO role1")
+        self._verify_permission_changes_are_propagated(cathy, "SELECT * FROM ks.cf2")
+
+        # Same test as above, but for permission granted to transitive role
+
+        cassandra.execute("GRANT SELECT ON TABLE ks.cf3 TO role2")
+
+        cathy = self.patient_exclusive_cql_connection(node2, user='cathy', password='12345')
+        assert_unauthorized(cathy, "SELECT * FROM ks.cf3",
+                            "User cathy has no SELECT permission on <table ks.cf3> or any of its parents")
+
+        cassandra.execute("GRANT role2 TO cathy")
+        self._verify_permission_changes_are_propagated(cathy, "SELECT * FROM ks.cf3")
+
+        # Verifiy that credentials invalidation works
+
+        cathy3 = self.patient_exclusive_cql_connection(node3, user='cathy', password='12345')
+        cathy3.shutdown()
+        cassandra.execute("ALTER ROLE cathy WITH PASSWORD = 'abcdef'")
+        # immediately create a new session with the new password
+        cathy3 = self.patient_exclusive_cql_connection(node3, user='cathy', password='abcdef', timeout=5)
+        cathy3.shutdown()
+
+    def _verify_permission_changes_are_propagated(self, session, query):
+        # Give the nodes 3 seconds to have the GRANT/REVOKE being propagated to all nodes.
+        # Permission modificiations send invalidation internode messages that let the "other" nodes
+        # invalidate their caches.
+        wait_until = time.time() + 3
+        while time.time() < wait_until:
+            try:
+                session.execute(query)
+                return
+            except Unauthorized:
+                time.sleep(0.1)
+        # execute again without a try-except to propagate the exception
+        session.execute(query)
+
     def test_login(self):
         """
         * Launch a one node cluster
@@ -818,6 +898,7 @@ class TestAuth(Tester):
 
         assert_unauthorized(cathy, "SELECT * FROM ks.cf", "User cathy has no SELECT permission on <table ks.cf> or any of its parents")
 
+    @since('2.1', max_version='3.99')
     def test_permissions_caching(self):
         """
         * Launch a one node cluster, with a 2s permission cache
@@ -828,6 +909,10 @@ class TestAuth(Tester):
         * Grant SELECT to cathy
         * Verify that reading from ks.cf throws Unauthorized until the cache expires
         * Verify that after the cache expires, we can eventually read with both sessions
+
+        This dtest tests cache-expiry, which is no longer relevant since we send INVALIDATE
+        verbs to invalidate cached authz information. Therefore, this dtest does not run
+        since C* 4.0.
 
         @jira_ticket CASSANDRA-8194
         """
@@ -1085,15 +1170,16 @@ class TestAuth(Tester):
             assert success > 0
             assert failure > 0
 
-    def prepare(self, nodes=1, permissions_validity=0):
+    def prepare(self, nodes=1, permissions_validity=0, config={}):
         """
         Sets up and launches C* cluster.
         @param nodes Number of nodes in the cluster. Default is 1
         @param permissions_validity The timeout for the permissions cache in ms. Default is 0.
+        @param config additional configuration options
         """
-        config = {'authenticator': 'org.apache.cassandra.auth.PasswordAuthenticator',
-                  'authorizer': 'org.apache.cassandra.auth.CassandraAuthorizer',
-                  'permissions_validity_in_ms': permissions_validity}
+        config.update({'authenticator': 'org.apache.cassandra.auth.PasswordAuthenticator',
+                       'authorizer': 'org.apache.cassandra.auth.CassandraAuthorizer',
+                       'permissions_validity_in_ms': permissions_validity})
         if self.dtest_config.cassandra_version_from_build >= '3.0':
             config['enable_materialized_views'] = 'true'
         if self.dtest_config.cassandra_version_from_build >= '4.0':
@@ -2265,8 +2351,7 @@ class TestAuthRoles(Tester):
         self.superuser.execute("GRANT EXECUTE ON FUNCTION ks.plus_one(int) TO mike")
         self.superuser.execute("CREATE ROLE role1")
         cql = "GRANT EXECUTE ON FUNCTION ks.plus_one(int) TO role1"
-        assert_unauthorized(as_mike, cql,
-                            r"User mike has no AUTHORIZE permission on <function ks.plus_one\(int\)> or any of its parents")
+        assert_unauthorized_for_grant(self.cluster, as_mike, "mike", cql, "AUTHORIZE", "EXECUTE", "<function ks.plus_one\(int\)>")
         self.superuser.execute("GRANT AUTHORIZE ON FUNCTION ks.plus_one(int) TO mike")
         as_mike.execute(cql)
         # now revoke AUTHORIZE from mike
@@ -3046,9 +3131,10 @@ class TestAuthUnavailable(Tester):
                   'permissions_update_interval_in_ms': cache_update_interval,
                   'roles_validity_in_ms': cache_validity,
                   'roles_update_interval_in_ms': cache_update_interval}
-        if self.dtest_config.cassandra_version_from_build >= '3.0':
+        version_from_build = self.dtest_config.cassandra_version_from_build
+        if version_from_build >= '3.0':
             config['enable_materialized_views'] = 'true'
-        if self.dtest_config.cassandra_version_from_build >= '3.4':
+        if '3.4' <= version_from_build < '4.0':
             config['credentials_validity_in_ms'] = cache_validity
             config['credentials_update_interval_in_ms'] = cache_update_interval
         self.cluster.set_configuration_options(values=config)
@@ -3141,7 +3227,8 @@ class TestNetworkAuth(Tester):
         # connect to the dc2 node, then remove permission for it
         session = self.exclusive_cql_connection(self.dc2_node, user=username, password='password')
         self.superuser.execute("ALTER ROLE %s WITH ACCESS TO DATACENTERS {'dc1'}" % username)
-        self.clear_network_auth_cache(self.dc2_node)
+        if self.cluster.cassandra_version() >= '4.0':
+            self.clear_network_auth_cache(self.dc2_node)
         self.assertUnauthorized(lambda: session.execute("SELECT * FROM ks.tbl"))
 
     def test_create_dc_validation(self):
@@ -3177,8 +3264,9 @@ class TestNetworkAuth(Tester):
         # connect to the dc2 node, then remove permission for it
         session = self.exclusive_cql_connection(self.dc2_node, user=username, password='password')
         superuser.execute("ALTER ROLE %s WITH LOGIN=false" % username)
-        self.clear_roles_cache(self.dc2_node)
-        self.clear_network_auth_cache(self.dc2_node)
+        if self.cluster.cassandra_version() >= '4.0':
+            self.clear_roles_cache(self.dc2_node)
+            self.clear_network_auth_cache(self.dc2_node)
         self.assertUnauthorized(lambda: session.execute("SELECT * FROM ks.tbl"))
 
 
