@@ -2641,6 +2641,35 @@ class TestAuthRoles(Tester):
         self.superuser.execute("UPDATE system_auth.roles SET member_of = {'role1'} where role = 'mike'")
         assert_all(self.superuser, "LIST ROLES OF mike", [list(self.role('mike'))])
 
+    @since("4.0")
+    def grant_revoke_list_multiple_test(self):
+        cassandra = self.get_session(user='cassandra', password='cassandra')
+        cassandra.execute("CREATE USER lazy WITH PASSWORD '12345'")
+
+        cassandra.execute("""CREATE KEYSPACE ks WITH replication = {'class':'SimpleStrategy', 'replication_factor':1}""")
+
+        self.assert_no_permissions(cassandra, "LIST ALL PERMISSIONS OF lazy")
+
+        cassandra.execute('GRANT SELECT, MODIFY ON KEYSPACE ks TO lazy')
+
+        expected_permissions = [('lazy', '<keyspace ks>', 'SELECT'),
+                                ('lazy', '<keyspace ks>', 'MODIFY')]
+        self.assert_permissions_listed(expected_permissions, cassandra, "LIST ALL PERMISSIONS OF lazy")
+
+        cassandra.execute('GRANT ALTER PERMISSION, CREATE ON KEYSPACE ks TO lazy')
+
+        expected_permissions = [('lazy', '<keyspace ks>', 'SELECT'),
+                                ('lazy', '<keyspace ks>', 'MODIFY'),
+                                ('lazy', '<keyspace ks>', 'ALTER'),
+                                ('lazy', '<keyspace ks>', 'CREATE')]
+        self.assert_permissions_listed(expected_permissions, cassandra, "LIST ALL PERMISSIONS OF lazy")
+
+        cassandra.execute('REVOKE MODIFY, ALTER PERMISSION ON KEYSPACE ks FROM lazy')
+
+        expected_permissions = [('lazy', '<keyspace ks>', 'SELECT'),
+                                ('lazy', '<keyspace ks>', 'CREATE')]
+        self.assert_permissions_listed(expected_permissions, cassandra, "LIST ALL PERMISSIONS OF lazy")
+
     def setup_table(self):
         self.superuser.execute("CREATE KEYSPACE ks WITH REPLICATION = {'class':'SimpleStrategy', 'replication_factor':1}")
         self.superuser.execute("CREATE TABLE ks.t1 (k int PRIMARY KEY, v int)")
