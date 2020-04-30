@@ -16,7 +16,7 @@ from dtest_setup_overrides import DTestSetupOverrides
 from dtest import Tester
 from tools.assertions import (assert_all, assert_exception, assert_invalid,
                               assert_length_equal, assert_one,
-                              assert_unauthorized)
+                              assert_unauthorized, assert_unauthorized_for_grant)
 from tools.jmxutils import (JolokiaAgent, make_mbean,
                             remove_perf_disable_shared_mem)
 from tools.metadata_wrapper import UpdatingKeyspaceMetadataWrapper
@@ -730,12 +730,14 @@ class TestAuth(Tester):
 
         cathy = self.get_session(user='cathy', password='12345')
         # missing both SELECT and AUTHORIZE
-        assert_unauthorized(cathy, "GRANT SELECT ON ALL KEYSPACES TO bob", "User cathy has no AUTHORIZE permission on <all keyspaces> or any of its parents")
+        assert_unauthorized_for_grant(self.cluster, cathy, "cathy", "GRANT SELECT ON ALL KEYSPACES TO bob",
+                                      "AUTHORIZE", "SELECT", "<all keyspaces>")
 
         cassandra.execute("GRANT AUTHORIZE ON ALL KEYSPACES TO cathy")
 
         # still missing SELECT
-        assert_unauthorized(cathy, "GRANT SELECT ON ALL KEYSPACES TO bob", "User cathy has no SELECT permission on <all keyspaces> or any of its parents")
+        assert_unauthorized_for_grant(self.cluster, cathy, "cathy", "GRANT SELECT ON ALL KEYSPACES TO bob",
+                                      "SELECT", "SELECT", "<all keyspaces>")
 
         cassandra.execute("GRANT SELECT ON ALL KEYSPACES TO cathy")
 
@@ -2270,8 +2272,7 @@ class TestAuthRoles(Tester):
         # now revoke AUTHORIZE from mike
         self.superuser.execute("REVOKE AUTHORIZE ON FUNCTION ks.plus_one(int) FROM mike")
         cql = "REVOKE EXECUTE ON FUNCTION ks.plus_one(int) FROM role1"
-        assert_unauthorized(as_mike, cql,
-                            r"User mike has no AUTHORIZE permission on <function ks.plus_one\(int\)> or any of its parents")
+        assert_unauthorized_for_grant(self.cluster, as_mike, "mike", cql, "AUTHORIZE", "EXECUTE", "<function ks.plus_one\(int\)>")
         self.superuser.execute("GRANT AUTHORIZE ON FUNCTION ks.plus_one(int) TO mike")
         as_mike.execute(cql)
 
