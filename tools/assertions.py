@@ -114,6 +114,28 @@ def assert_unauthorized(session, query, message):
     assert_exception(session, query, matching=message, expected=Unauthorized)
 
 
+def assert_unauthorized_for_grant(cluster, session, user, cql, primary_perm, secondary_perm, resource):
+    """
+    Assert for an 'UnauthorizedException' respecting the error message change.
+    Prepares the error message to check for and calls 'assert_unauthorized'.
+    :param cluster: pass in 'self.cluster' from the dtest
+    :param session: the session instance to use
+    :param user: current username authenticated on the session
+    :param cql: the GRANT CQL
+    :param primary_perm: the permission that is required to execute the grant (usually AUTHORIZE or, if AUTHORIZE
+           is already granted, the permission to be granted)
+    :param secondary_perm: the permission to be granted (e.g. SELECT, EXECUTE)
+    :param resource: the string representation for the resource - e.g. '<table ks.cf>'
+    """
+    has_separation_of_duties = cluster.version() >= '4.0'
+    if has_separation_of_duties:
+        msg = "User {} has no {} permission nor AUTHORIZE FOR {} permission on {} or any of its parents".format(
+            user, primary_perm, secondary_perm, resource)
+    else:
+        msg = "User {} has no {} permission on {} or any of its parents".format(user, primary_perm, resource)
+    assert_unauthorized(session, cql, msg)
+
+
 def assert_one(session, query, expected, cl=None):
     """
     Assert query returns one row.
