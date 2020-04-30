@@ -1001,6 +1001,8 @@ class TestAuth(Tester):
         """
         self.prepare()
 
+        with_describe = self.cluster.cassandra_version() >= '4.0'
+
         cassandra = self.get_session(user='cassandra', password='cassandra')
         cassandra.execute("CREATE USER cathy WITH PASSWORD '12345'")
         cassandra.execute("CREATE USER bob WITH PASSWORD '12345'")
@@ -1024,7 +1026,7 @@ class TestAuth(Tester):
 
         # CASSANDRA-7216 automatically grants permissions on a role to its creator
         if self.cluster.cassandra_version() >= '2.2.0':
-            all_permissions.extend(data_resource_creator_permissions('cassandra', '<keyspace ks>'))
+            all_permissions.extend(data_resource_creator_permissions('cassandra', '<keyspace ks>', with_describe))
             all_permissions.extend(data_resource_creator_permissions('cassandra', '<table ks.cf>'))
             all_permissions.extend(data_resource_creator_permissions('cassandra', '<table ks.cf2>'))
             all_permissions.extend(role_creator_permissions('cassandra', '<role bob>'))
@@ -1215,11 +1217,12 @@ class TestAuth(Tester):
         assert sorted(expected) == sorted(perms)
 
 
-def data_resource_creator_permissions(creator, resource):
+def data_resource_creator_permissions(creator, resource, with_describe=False):
     """
     Assemble a list of all permissions needed to create data on a given resource
     @param creator User who needs permissions
     @param resource The resource to grant permissions on
+    @param with_describe add 'DESCRIBE' description (from "separation of duties" feature)
     @return A list of permissions for creator on resource
     """
     permissions = []
@@ -1227,6 +1230,8 @@ def data_resource_creator_permissions(creator, resource):
         permissions.append((creator, resource, perm))
     if resource.startswith("<keyspace "):
         permissions.append((creator, resource, 'CREATE'))
+        if with_describe:
+            permissions.append((creator, resource, 'DESCRIBE'))
         keyspace = resource[10:-1]
         # also grant the creator of a ks perms on functions in that ks
         for perm in 'CREATE', 'ALTER', 'DROP', 'AUTHORIZE', 'EXECUTE':
@@ -1434,6 +1439,9 @@ class TestAuthRoles(Tester):
         * Connect as mike
         * Verify that mike is automatically granted permissions on any resource he creates
         """
+
+        with_describe = self.cluster.cassandra_version() >= '4.0'
+
         self.superuser.execute("CREATE ROLE mike WITH PASSWORD = '12345' AND SUPERUSER = false AND LOGIN = true")
         self.superuser.execute("GRANT CREATE ON ALL KEYSPACES TO mike")
         self.superuser.execute("GRANT CREATE ON ALL ROLES TO mike")
@@ -1457,7 +1465,7 @@ class TestAuthRoles(Tester):
         mike_permissions = [('mike', '<all roles>', 'CREATE'),
                             ('mike', '<all keyspaces>', 'CREATE')]
         mike_permissions.extend(role_creator_permissions('mike', '<role role1>'))
-        mike_permissions.extend(data_resource_creator_permissions('mike', '<keyspace ks>'))
+        mike_permissions.extend(data_resource_creator_permissions('mike', '<keyspace ks>', with_describe))
         mike_permissions.extend(data_resource_creator_permissions('mike', '<table ks.cf>'))
         mike_permissions.extend(function_resource_creator_permissions('mike', '<function ks.state_function_1(int, int)>'))
         mike_permissions.extend(function_resource_creator_permissions('mike', '<function ks.simple_aggregate_1(int)>'))
@@ -1729,6 +1737,9 @@ class TestAuthRoles(Tester):
         * Grant ALL permissions to mike for each resource. Verify they show up in LIST ALL PERMISSIONS
         * Verify you can't selectively grant invalid permissions for a given resource. ex: CREATE on an existing table
         """
+
+        with_describe = self.cluster.cassandra_version() >= '4.0'
+
         self.superuser.execute("CREATE KEYSPACE ks WITH replication = {'class':'SimpleStrategy', 'replication_factor':1}")
         self.superuser.execute("CREATE TABLE ks.cf (id int primary key, val int)")
         self.superuser.execute("CREATE ROLE mike WITH PASSWORD = '12345' AND SUPERUSER = false AND LOGIN = true")
@@ -1745,7 +1756,8 @@ class TestAuthRoles(Tester):
                                         ("mike", "<keyspace ks>", "DROP"),
                                         ("mike", "<keyspace ks>", "SELECT"),
                                         ("mike", "<keyspace ks>", "MODIFY"),
-                                        ("mike", "<keyspace ks>", "AUTHORIZE")],
+                                        ("mike", "<keyspace ks>", "AUTHORIZE")] +
+                                       ([("mike", "<keyspace ks>", "DESCRIBE")] if with_describe else []),
                                        self.superuser,
                                        "LIST ALL PERMISSIONS OF mike")
         self.superuser.execute("REVOKE ALL ON KEYSPACE ks FROM mike")
@@ -1843,6 +1855,9 @@ class TestAuthRoles(Tester):
         * Grant various permissions to roles
         * Verify they propagate appropriately.
         """
+
+        with_describe = self.cluster.cassandra_version() >= '4.0'
+
         self.superuser.execute("CREATE KEYSPACE ks WITH replication = {'class':'SimpleStrategy', 'replication_factor':1}")
         self.superuser.execute("CREATE TABLE ks.cf (id int primary key, val int)")
         self.superuser.execute("CREATE ROLE mike WITH PASSWORD = '12345' AND SUPERUSER = false AND LOGIN = true")
@@ -1859,7 +1874,7 @@ class TestAuthRoles(Tester):
                                 ("role1", "<table ks.cf>", "SELECT"),
                                 ("role2", "<table ks.cf>", "ALTER"),
                                 ("role2", "<role role1>", "ALTER")]
-        expected_permissions.extend(data_resource_creator_permissions('cassandra', '<keyspace ks>'))
+        expected_permissions.extend(data_resource_creator_permissions('cassandra', '<keyspace ks>', with_describe))
         expected_permissions.extend(data_resource_creator_permissions('cassandra', '<table ks.cf>'))
         expected_permissions.extend(role_creator_permissions('cassandra', '<role mike>'))
         expected_permissions.extend(role_creator_permissions('cassandra', '<role role1>'))
