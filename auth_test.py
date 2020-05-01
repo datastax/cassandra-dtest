@@ -1002,6 +1002,7 @@ class TestAuth(Tester):
         self.prepare()
 
         with_describe = self.cluster.cassandra_version() >= '4.0'
+        with_truncate = self.cluster.cassandra_version() >= '4.0'
 
         cassandra = self.get_session(user='cassandra', password='cassandra')
         cassandra.execute("CREATE USER cathy WITH PASSWORD '12345'")
@@ -1026,9 +1027,12 @@ class TestAuth(Tester):
 
         # CASSANDRA-7216 automatically grants permissions on a role to its creator
         if self.cluster.cassandra_version() >= '2.2.0':
-            all_permissions.extend(data_resource_creator_permissions('cassandra', '<keyspace ks>', with_describe))
-            all_permissions.extend(data_resource_creator_permissions('cassandra', '<table ks.cf>'))
-            all_permissions.extend(data_resource_creator_permissions('cassandra', '<table ks.cf2>'))
+            all_permissions.extend(data_resource_creator_permissions('cassandra', '<keyspace ks>',
+                                                                     with_describe, with_truncate))
+            all_permissions.extend(data_resource_creator_permissions('cassandra', '<table ks.cf>',
+                                                                     with_describe, with_truncate))
+            all_permissions.extend(data_resource_creator_permissions('cassandra', '<table ks.cf2>',
+                                                                     with_describe, with_truncate))
             all_permissions.extend(role_creator_permissions('cassandra', '<role bob>'))
             all_permissions.extend(role_creator_permissions('cassandra', '<role cathy>'))
 
@@ -1041,7 +1045,8 @@ class TestAuth(Tester):
 
         expected_permissions = [('cathy', '<table ks.cf>', 'MODIFY'), ('bob', '<table ks.cf>', 'DROP')]
         if self.cluster.cassandra_version() >= '2.2.0':
-            expected_permissions.extend(data_resource_creator_permissions('cassandra', '<table ks.cf>'))
+            expected_permissions.extend(data_resource_creator_permissions('cassandra', '<table ks.cf>',
+                                                                          with_describe, with_truncate))
         self.assertPermissionsListed(expected_permissions, cassandra, "LIST ALL PERMISSIONS ON ks.cf NORECURSIVE")
 
         expected_permissions = [('cathy', '<table ks.cf2>', 'SELECT')]
@@ -1217,7 +1222,7 @@ class TestAuth(Tester):
         assert sorted(expected) == sorted(perms)
 
 
-def data_resource_creator_permissions(creator, resource, with_describe=False):
+def data_resource_creator_permissions(creator, resource, with_describe, with_truncate):
     """
     Assemble a list of all permissions needed to create data on a given resource
     @param creator User who needs permissions
@@ -1225,9 +1230,15 @@ def data_resource_creator_permissions(creator, resource, with_describe=False):
     @param with_describe add 'DESCRIBE' description (from "separation of duties" feature)
     @return A list of permissions for creator on resource
     """
-    permissions = []
-    for perm in 'SELECT', 'MODIFY', 'ALTER', 'DROP', 'AUTHORIZE':
-        permissions.append((creator, resource, perm))
+    permissions = [(creator, resource, 'SELECT')]
+    if not with_truncate:
+        permissions.append((creator, resource, 'MODIFY'))
+    permissions.append((creator, resource, 'ALTER'))
+    permissions.append((creator, resource, 'DROP'))
+    permissions.append((creator, resource, 'AUTHORIZE'))
+    if with_truncate:
+        permissions.append((creator, resource, 'TRUNCATE'))
+        permissions.append((creator, resource, 'UPDATE'))
     if resource.startswith("<keyspace "):
         permissions.append((creator, resource, 'CREATE'))
         if with_describe:
@@ -1441,6 +1452,7 @@ class TestAuthRoles(Tester):
         """
 
         with_describe = self.cluster.cassandra_version() >= '4.0'
+        with_truncate = self.cluster.cassandra_version() >= '4.0'
 
         self.superuser.execute("CREATE ROLE mike WITH PASSWORD = '12345' AND SUPERUSER = false AND LOGIN = true")
         self.superuser.execute("GRANT CREATE ON ALL KEYSPACES TO mike")
@@ -1465,8 +1477,10 @@ class TestAuthRoles(Tester):
         mike_permissions = [('mike', '<all roles>', 'CREATE'),
                             ('mike', '<all keyspaces>', 'CREATE')]
         mike_permissions.extend(role_creator_permissions('mike', '<role role1>'))
-        mike_permissions.extend(data_resource_creator_permissions('mike', '<keyspace ks>', with_describe))
-        mike_permissions.extend(data_resource_creator_permissions('mike', '<table ks.cf>'))
+        mike_permissions.extend(data_resource_creator_permissions('mike', '<keyspace ks>',
+                                                                  with_describe, with_truncate))
+        mike_permissions.extend(data_resource_creator_permissions('mike', '<table ks.cf>',
+                                                                  with_describe, with_truncate))
         mike_permissions.extend(function_resource_creator_permissions('mike', '<function ks.state_function_1(int, int)>'))
         mike_permissions.extend(function_resource_creator_permissions('mike', '<function ks.simple_aggregate_1(int)>'))
 
@@ -1739,6 +1753,7 @@ class TestAuthRoles(Tester):
         """
 
         with_describe = self.cluster.cassandra_version() >= '4.0'
+        with_truncate = self.cluster.cassandra_version() >= '4.0'
 
         self.superuser.execute("CREATE KEYSPACE ks WITH replication = {'class':'SimpleStrategy', 'replication_factor':1}")
         self.superuser.execute("CREATE TABLE ks.cf (id int primary key, val int)")
@@ -1755,8 +1770,10 @@ class TestAuthRoles(Tester):
                                         ("mike", "<keyspace ks>", "ALTER"),
                                         ("mike", "<keyspace ks>", "DROP"),
                                         ("mike", "<keyspace ks>", "SELECT"),
-                                        ("mike", "<keyspace ks>", "MODIFY"),
                                         ("mike", "<keyspace ks>", "AUTHORIZE")] +
+                                       ([("mike", "<keyspace ks>", "UPDATE"),
+                                         ("mike", "<keyspace ks>", "TRUNCATE")] if with_truncate else
+                                        [("mike", "<keyspace ks>", "MODIFY")]) +
                                        ([("mike", "<keyspace ks>", "DESCRIBE")] if with_describe else []),
                                        self.superuser,
                                        "LIST ALL PERMISSIONS OF mike")
@@ -1767,8 +1784,10 @@ class TestAuthRoles(Tester):
         self.assert_permissions_listed([("mike", "<table ks.cf>", "ALTER"),
                                         ("mike", "<table ks.cf>", "DROP"),
                                         ("mike", "<table ks.cf>", "SELECT"),
-                                        ("mike", "<table ks.cf>", "MODIFY"),
-                                        ("mike", "<table ks.cf>", "AUTHORIZE")],
+                                        ("mike", "<table ks.cf>", "AUTHORIZE")] +
+                                       ([("mike", "<table ks.cf>", "UPDATE"),
+                                         ("mike", "<table ks.cf>", "TRUNCATE")] if with_truncate else
+                                        [("mike", "<table ks.cf>", "MODIFY")]),
                                        self.superuser,
                                        "LIST ALL PERMISSIONS OF mike")
         self.superuser.execute("REVOKE ALL ON ks.cf FROM mike")
@@ -1857,6 +1876,7 @@ class TestAuthRoles(Tester):
         """
 
         with_describe = self.cluster.cassandra_version() >= '4.0'
+        with_truncate = self.cluster.cassandra_version() >= '4.0'
 
         self.superuser.execute("CREATE KEYSPACE ks WITH replication = {'class':'SimpleStrategy', 'replication_factor':1}")
         self.superuser.execute("CREATE TABLE ks.cf (id int primary key, val int)")
@@ -1874,8 +1894,10 @@ class TestAuthRoles(Tester):
                                 ("role1", "<table ks.cf>", "SELECT"),
                                 ("role2", "<table ks.cf>", "ALTER"),
                                 ("role2", "<role role1>", "ALTER")]
-        expected_permissions.extend(data_resource_creator_permissions('cassandra', '<keyspace ks>', with_describe))
-        expected_permissions.extend(data_resource_creator_permissions('cassandra', '<table ks.cf>'))
+        expected_permissions.extend(data_resource_creator_permissions('cassandra', '<keyspace ks>',
+                                                                      with_describe, with_truncate))
+        expected_permissions.extend(data_resource_creator_permissions('cassandra', '<table ks.cf>',
+                                                                      with_describe, with_truncate))
         expected_permissions.extend(role_creator_permissions('cassandra', '<role mike>'))
         expected_permissions.extend(role_creator_permissions('cassandra', '<role role1>'))
         expected_permissions.extend(role_creator_permissions('cassandra', '<role role2>'))
