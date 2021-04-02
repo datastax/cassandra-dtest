@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-usage: run_dtests.py [-h] [--use-vnodes] [--use-off-heap-memtables] [--num-tokens=NUM_TOKENS] [--data-dir-count-per-instance=DATA_DIR_COUNT_PER_INSTANCE]
+usage: run_dtests.py [-h] [--sstable-format=FORMAT] [--use-vnodes] [--use-off-heap-memtables] [--num-tokens=NUM_TOKENS] [--data-dir-count-per-instance=DATA_DIR_COUNT_PER_INSTANCE]
                      [--force-resource-intensive-tests] [--skip-resource-intensive-tests] [--cassandra-dir=CASSANDRA_DIR] [--cassandra-version=CASSANDRA_VERSION]
                      [--delete-logs] [--execute-upgrade-tests] [--execute-upgrade-tests-only] [--disable-active-log-watching] [--keep-test-dir]
                      [--enable-jacoco-code-coverage] [--dtest-enable-debug-logging] [--dtest-print-tests-only] [--dtest-print-tests-output=DTEST_PRINT_TESTS_OUTPUT]
@@ -8,6 +8,7 @@ usage: run_dtests.py [-h] [--use-vnodes] [--use-off-heap-memtables] [--num-token
 
 optional arguments:
   -h, --help                                                 show this help message and exit
+  --sstable-format                                           SSTable format to be used by default for all newly created SSTables: big or bti (default: bti)
   --use-vnodes                                               Determines wither or not to setup clusters using vnodes for tests (default: False)
   --use-off-heap-memtables                                   Enable Off Heap Memtables when creating test clusters for tests (default: False)
   --num-tokens=NUM_TOKENS                                    Number of tokens to set num_tokens yaml setting to when creating instances with vnodes enabled (default: 256)
