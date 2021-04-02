@@ -11,6 +11,7 @@ import logging
 from ccmlib import common
 
 from tools.misc import ImmutableMapping
+from distutils.version import LooseVersion
 from dtest_setup_overrides import DTestSetupOverrides
 from dtest import Tester, create_ks, create_cf
 from tools.assertions import assert_length_equal, assert_stderr_clean
@@ -118,6 +119,10 @@ class TestHelper(Tester):
         """
         node1 = self.cluster.nodelist()[0]
         env = common.make_cassandra_env(node1.get_install_cassandra_root(), node1.get_node_cassandra_root())
+
+        if node1.is_converged_core() and LooseVersion("4.0") <= self.cluster.cassandra_version() < LooseVersion("5.0"):
+            self.dtest_config.set_sstable_default(env, "JVM_OPTS")
+
         scrub_bin = node1.get_tool('sstablescrub')
         logger.debug(scrub_bin)
 

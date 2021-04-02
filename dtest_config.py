@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 class DTestConfig:
     def __init__(self):
+        self.sstable_format = "bti"
         self.use_vnodes = True
         self.configuration_yaml = None
         self.use_off_heap_memtables = False
@@ -42,6 +43,10 @@ class DTestConfig:
             self.cassandra_dir = os.path.join(os.getcwd(), "meta_tests/cassandra-dir-4.0-beta")
             self.cassandra_version_from_build = self.get_version_from_build()
             return
+
+        self.sstable_format = config.getoption("--sstable-format")
+        if self.sstable_format:
+            assert self.sstable_format in ['bti', 'big'], "SSTable format {} is invalid - must be either bti or big".format(self.sstable_format)
 
         self.use_vnodes = config.getoption("--use-vnodes")
         self.configuration_yaml = config.getoption("--configuration-yaml")
@@ -94,6 +99,22 @@ class DTestConfig:
                              "for details" % version)
 
         self.latest_config = False if self.configuration_yaml is None else self.configuration_yaml.endswith("cassandra_latest.yaml")
+
+        if str(version).startswith("4.0.11."):
+            # jvm flag 'cassandra.sstable.format.default' is only for CC4
+            self.set_sstable_default(os.environ, "JVM_EXTRA_OPTS")
+
+    def set_sstable_default(self, env, key="JVM_OPTS"):
+        """ the jvm flag 'cassandra.sstable.format.default' is only for CC4 """
+        current = env.get(key) or ""
+        if self.sstable_format and "bti" != current:
+            default_sstable_format_prop = " -Dcassandra.sstable.format.default=" + self.sstable_format
+            if not current.__contains__("-Dcassandra.sstable.format.default"):
+                env.update({key: (env.get(key) or "") + default_sstable_format_prop})
+            else:
+                logger.debug("Skipped adding {} because it is already in the env key {}: {}".format(default_sstable_format_prop, key, current))
+        else:
+            logger.debug("Skipped setting cassandra.sstable.format.default because value is blank or already the default: {}".format(current))
 
 
     def get_version_from_build(self):
