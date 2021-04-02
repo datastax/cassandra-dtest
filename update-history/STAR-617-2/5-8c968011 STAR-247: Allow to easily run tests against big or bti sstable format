@@ -1,0 +1,27 @@
+commit 8c9680112dc2ba92b04460e695b74fa0273b2791
+Author:     jacek-lewandowski <jacek.lewandowski@datastax.com>
+AuthorDate: Fri Apr 2 13:51:45 2021 +0200
+Commit:     jacek-lewandowski <jacek.lewandowski@datastax.com>
+CommitDate: Mon Apr 12 17:01:32 2021 +0200
+
+    STAR-247: Allow to easily run tests against big or bti sstable format
+
+Resolutions:
+diff --git a/dtest_config.py b/dtest_config.py
+index fbe15a9f..116566b2 100644
+--- a/dtest_config.py
++++ b/dtest_config.py
+@@ -43,9 +43,10 @@ class DTestConfig:
+             return
+ 
+         self.sstable_format = config.getoption("--sstable-format")
+-        assert self.sstable_format in ['bti', 'big'], "SSTable format {} is invalid - must be either bti or big".format(self.sstable_format)
+-        default_sstable_format_prop = " -Dcassandra.sstable.format.default=" + self.sstable_format
+-        os.environ.update({"JVM_EXTRA_OPTS": (os.environ.get("JVM_EXTRA_OPTS") or "") + default_sstable_format_prop})
++        if self.sstable_format:
++            assert self.sstable_format in ['bti', 'big'], "SSTable format {} is invalid - must be either bti or big".format(self.sstable_format)
++            default_sstable_format_prop = " -Dcassandra.sstable.format.default=" + self.sstable_format
++            os.environ.update({"JVM_EXTRA_OPTS": (os.environ.get("JVM_EXTRA_OPTS") or "") + default_sstable_format_prop})
+ 
+         self.use_vnodes = config.getoption("--use-vnodes")
+         self.use_off_heap_memtables = config.getoption("--use-off-heap-memtables")
