@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 class DTestConfig:
     def __init__(self):
+        self.sstable_format = "bti"
         self.use_vnodes = True
         self.use_off_heap_memtables = False
         self.num_tokens = -1
@@ -40,6 +41,12 @@ class DTestConfig:
             self.cassandra_dir = os.path.join(os.getcwd(), "meta_tests/cassandra-dir-4.0-beta")
             self.cassandra_version_from_build = self.get_version_from_build()
             return
+
+        self.sstable_format = config.getoption("--sstable-format")
+        if self.sstable_format:
+            assert self.sstable_format in ['bti', 'big'], "SSTable format {} is invalid - must be either bti or big".format(self.sstable_format)
+            default_sstable_format_prop = " -Dcassandra.sstable.format.default=" + self.sstable_format
+            os.environ.update({"JVM_EXTRA_OPTS": (os.environ.get("JVM_EXTRA_OPTS") or "") + default_sstable_format_prop})
 
         self.use_vnodes = config.getoption("--use-vnodes")
         self.use_off_heap_memtables = config.getoption("--use-off-heap-memtables")
