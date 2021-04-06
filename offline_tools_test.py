@@ -277,9 +277,9 @@ class TestOfflineTools(Tester):
             hashcomputed = False
             for line in outlines:
                 if sstable in line:
-                    if "Verifying BigTableReader" in line:
+                    if "Verifying " in line:
                         verified = True
-                    elif "Checking computed hash of BigTableReader" in line:
+                    elif "Checking computed hash of " in line:
                         hashcomputed = True
                     else:
                         logger.debug(line)
