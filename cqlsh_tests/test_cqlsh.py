@@ -1198,6 +1198,7 @@ CREATE TYPE test.address_type (
             AND comment = ''
             AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', 'max_threshold': '32', 'min_threshold': '4'}
             AND compression = {'chunk_length_in_kb': '16', 'class': 'org.apache.cassandra.io.compress.LZ4Compressor'}
+            AND memtable = {}
             AND crc_check_chance = 1.0
             AND default_time_to_live = 0
             AND extensions = {}
@@ -1339,6 +1340,7 @@ CREATE TYPE test.address_type (
             AND comment = ''
             AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', 'max_threshold': '32', 'min_threshold': '4'}
             AND compression = {'chunk_length_in_kb': '16', 'class': 'org.apache.cassandra.io.compress.LZ4Compressor'}
+            AND memtable = {}
             AND crc_check_chance = 1.0
             AND default_time_to_live = 0
             AND extensions = {}
@@ -1498,6 +1500,7 @@ CREATE TYPE test.address_type (
                 AND comment = ''
                 AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', 'max_threshold': '32', 'min_threshold': '4'}
                 AND compression = {'chunk_length_in_kb': '16', 'class': 'org.apache.cassandra.io.compress.LZ4Compressor'}
+                AND memtable = {}
                 AND crc_check_chance = 1.0
                 AND extensions = {}
                 AND gc_grace_seconds = 864000
