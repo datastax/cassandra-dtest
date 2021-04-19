@@ -1,12 +1,13 @@
-import time
-
 import logging
+import pytest
 
 from dtest import Tester, create_ks
 
 logger = logging.getLogger(__name__)
+since = pytest.mark.since
 
 
+@since("4.0")
 class TestCqlshTypes(Tester):
 
     def prepare(self, workload=None):
