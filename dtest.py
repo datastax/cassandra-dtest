@@ -359,6 +359,8 @@ def create_ks(session, name, rf):
     if isinstance(rf, int):
         # we assume simpleStrategy
         query = query % (name, "'class':'SimpleStrategy', 'replication_factor':%d" % rf)
+    elif 'EverywhereStrategy' in rf:
+        query = query % (name, "'class':'org.apache.cassandra.locator.EverywhereStrategy'")
     else:
         assert len(rf) >= 0, "At least one datacenter/rf pair is needed"
         # we assume networkTopologyStrategy
