@@ -1019,6 +1019,56 @@ class BootstrapTester(Tester):
         assert_bootstrap_state(self, node3, 'COMPLETED', user='cassandra', password='cassandra')
         node3.wait_for_binary_interface()
 
+    @since('4.0')
+    @pytest.mark.no_vnodes
+    def test_simple_bootstrap_with_everywhere_strategy(self):
+        cluster = self.cluster
+        tokens = cluster.balanced_tokens(2)
+        cluster.set_configuration_options(values={'num_tokens': 1})
+
+        logger.debug("[node1, node2] tokens: %r" % (tokens,))
+
+        keys = 10000
+
+        # Create a single node cluster
+        cluster.populate(1)
+        node1 = cluster.nodelist()[0]
+        node1.set_configuration_options(values={'initial_token': tokens[0]})
+        cluster.start()
+
+        session = self.patient_cql_connection(node1)
+        create_ks(session, 'ks', 'EverywhereStrategy')
+        create_cf(session, 'cf', columns={'c1': 'text', 'c2': 'text'})
+
+        insert_statement = session.prepare("INSERT INTO ks.cf (key, c1, c2) VALUES (?, 'value1', 'value2')")
+        execute_concurrent_with_args(session, insert_statement, [['k%d' % k] for k in range(keys)])
+
+        node1.flush()
+        node1.compact()
+
+        # Reads inserted data all during the bootstrap process. We shouldn't
+        # get any error
+        query_c1c2(session, random.randint(0, keys - 1), ConsistencyLevel.ONE)
+        session.shutdown()
+
+        # Bootstrapping a new node in the current version
+        node2 = new_node(cluster)
+        node2.set_configuration_options(values={'initial_token': tokens[1]})
+        node2.start(wait_for_binary_proto=True)
+        node2.compact()
+
+        node1.cleanup()
+        logger.debug("node1 size for ks.cf after cleanup: %s" % float(data_size(node1,'ks','cf')))
+        node1.compact()
+        logger.debug("node1 size for ks.cf after compacting: %s" % float(data_size(node1,'ks','cf')))
+
+        logger.debug("node2 size for ks.cf after compacting: %s" % float(data_size(node2,'ks','cf')))
+
+        size1 = float(data_size(node1,'ks','cf'))
+        size2 = float(data_size(node2,'ks','cf'))
+        assert_almost_equal(size1, size2, error=0.3)
+
+        assert_bootstrap_state(self, node2, 'COMPLETED')
 
 class TestBootstrap(BootstrapTester):
     """
