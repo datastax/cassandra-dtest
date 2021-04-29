@@ -16,7 +16,7 @@ from cassandra.cluster import Cluster as PyCluster
 from cassandra.cluster import NoHostAvailable
 from cassandra.cluster import EXEC_PROFILE_DEFAULT
 from cassandra.policies import WhiteListRoundRobinPolicy
-from ccmlib.common import is_win
+from ccmlib.common import is_win, CCM_40_YAML_OPTIONS
 from ccmlib.cluster import Cluster
 
 from dtest import (get_ip_from_node, make_execution_profile, get_auth_provider, get_port_from_node,
@@ -429,6 +429,10 @@ class DTestSetup(object):
             self.cluster.set_configuration_options(values={'memtable_allocation_type': 'offheap_objects'})
 
         self.cluster.set_configuration_options(values)
+
+        if self.cluster.is_dse_cluster():
+            self.cluster.set_configuration_options(CCM_40_YAML_OPTIONS, delete_empty=True, delete_always=True)
+
         logger.debug("Done setting configuration options:\n" + pprint.pformat(self.cluster._config_options, indent=4))
 
     def maybe_setup_jacoco(self, cluster_name='test'):

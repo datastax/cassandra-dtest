@@ -26,6 +26,7 @@ CASSANDRA_2_2 = '2.2'
 CASSANDRA_3_0 = '3.0'
 CASSANDRA_3_11 = '3.11'
 CASSANDRA_4_0 = '4.0'
+CNDB = 'dse6.8'
 TRUNK = CASSANDRA_4_0
 
 def is_same_family_current_to_indev(origin, destination):
@@ -158,6 +159,8 @@ current_3_11_x = VersionMeta(name='current_3_11_x', family=CASSANDRA_3_11, varia
 
 indev_trunk = VersionMeta(name='indev_trunk', family=TRUNK, variant='indev', version='github:apache/trunk', min_proto_v=4, max_proto_v=5, java_versions=(8,))
 
+indev_cndb = VersionMeta(name='indev_cndb', family=CNDB, variant='indev', version='alias:bdp/6.8-cndb', min_proto_v=4, max_proto_v=4, java_versions=(8,))
+
 
 # MANIFEST maps a VersionMeta representing a line/variant to a list of other VersionMeta's representing supported upgrades
 # Note on versions: 2.0 must upgrade to 2.1. Once at 2.1 or newer, upgrade is supported to any later version, including trunk (for now).
@@ -168,14 +171,16 @@ indev_trunk = VersionMeta(name='indev_trunk', family=TRUNK, variant='indev', ver
 #   4) If a new sstable format is present in version B, writes will occur in that format after upgrade. Running sstableupgrade on version B will proactively convert version A sstables to version B.
 # TODO define new upgrade scenarios whenever Cassandra is branched
 MANIFEST = {
-    current_2_1_x: [indev_2_2_x, indev_3_0_x, indev_3_11_x],
-    current_2_2_x: [indev_2_2_x, indev_3_0_x, indev_3_11_x],
-    current_3_0_x: [indev_3_0_x, indev_3_11_x, indev_trunk],
-    current_3_11_x: [indev_3_11_x, indev_trunk],
-
-    indev_2_2_x: [indev_3_0_x, indev_3_11_x],
-    indev_3_0_x: [indev_3_11_x, indev_trunk],
-    indev_3_11_x: [indev_trunk]
+    # FIXME:
+    # current_2_1_x: [indev_2_2_x, indev_3_0_x, indev_3_11_x],
+    # current_2_2_x: [indev_2_2_x, indev_3_0_x, indev_3_11_x],
+    # current_3_0_x: [indev_3_0_x, indev_3_11_x, indev_trunk],
+    # current_3_11_x: [indev_3_11_x, indev_trunk],
+    #
+    # indev_2_2_x: [indev_3_0_x, indev_3_11_x],
+    # indev_3_0_x: [indev_3_11_x, indev_trunk],
+    # indev_3_11_x: [indev_trunk]
+    indev_cndb: [indev_trunk]
 }
 
 def _have_common_proto(origin_meta, destination_meta):

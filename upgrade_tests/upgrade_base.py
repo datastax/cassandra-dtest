@@ -132,10 +132,11 @@ class UpgradeTester(Tester, metaclass=ABCMeta):
         node1 = cluster.nodelist()[0]
         time.sleep(0.2)
 
+        # FIXME: cndb doesn't trully understand pv 5
         if cl:
-            session = self.patient_cql_connection(node1, protocol_version=protocol_version, consistency_level=cl, **kwargs)
+            session = self.patient_cql_connection(node1, protocol_version=4, consistency_level=cl, **kwargs)
         else:
-            session = self.patient_cql_connection(node1, protocol_version=protocol_version, **kwargs)
+            session = self.patient_cql_connection(node1, protocol_version=4, **kwargs)
         if create_keyspace:
             create_ks(session, 'ks', rf)
 
