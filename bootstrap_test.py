@@ -24,6 +24,7 @@ from tools.intervention import InterruptBootstrap, KillOnBootstrap, KillOnReadyT
 from tools.misc import new_node, generate_ssl_stores
 
 since = pytest.mark.since
+ported_to_in_jvm = pytest.mark.ported_to_in_jvm
 logger = logging.getLogger(__name__)
 
 class TestBootstrap(Tester):
@@ -216,6 +217,26 @@ class TestBootstrap(Tester):
         node3.start(wait_for_binary_proto=True)
 
         assert_bootstrap_state(self, node3, 'COMPLETED')
+
+    def test_schema_removed_nodes(self):
+        """
+        @jira_ticket CASSANDRA-16577
+        Test that nodes can bootstrap after a schema change performed with a node removed
+        """
+        cluster = self.cluster
+        cluster.set_environment_variable('CASSANDRA_TOKEN_PREGENERATION_DISABLED', 'True')
+        cluster.populate(2)
+        cluster.start()
+
+        node1, node2 = cluster.nodelist()
+
+        node2.decommission(force=cluster.version() > '4')
+
+        session = self.patient_cql_connection(node1)
+        session.execute("CREATE KEYSPACE k WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};")
+
+        node3 = new_node(cluster)
+        node3.start(wait_for_binary_proto=True)
 
     def test_read_from_bootstrapped_node(self):
         """
@@ -725,6 +746,7 @@ class TestBootstrap(Tester):
         node2.watch_log_for("JOINING:", from_mark=mark)
 
     @since('3.0')
+    @ported_to_in_jvm('4.1')
     def test_node_cannot_join_as_hibernating_node_without_replace_address(self):
         """
         @jira_ticket CASSANDRA-14559
