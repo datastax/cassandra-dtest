@@ -43,9 +43,10 @@ class DTestConfig:
             return
 
         self.sstable_format = config.getoption("--sstable-format")
-        assert self.sstable_format in ['bti', 'big'], "SSTable format {} is invalid - must be either bti or big".format(self.sstable_format)
-        default_sstable_format_prop = " -Dcassandra.sstable.format.default=" + self.sstable_format
-        os.environ.update({"JVM_EXTRA_OPTS": (os.environ.get("JVM_EXTRA_OPTS") or "") + default_sstable_format_prop})
+        if self.sstable_format:
+            assert self.sstable_format in ['bti', 'big'], "SSTable format {} is invalid - must be either bti or big".format(self.sstable_format)
+            default_sstable_format_prop = " -Dcassandra.sstable.format.default=" + self.sstable_format
+            os.environ.update({"JVM_EXTRA_OPTS": (os.environ.get("JVM_EXTRA_OPTS") or "") + default_sstable_format_prop})
 
         self.use_vnodes = config.getoption("--use-vnodes")
         self.use_off_heap_memtables = config.getoption("--use-off-heap-memtables")

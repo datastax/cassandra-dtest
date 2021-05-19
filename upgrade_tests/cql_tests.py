@@ -461,18 +461,26 @@ class TestCQL(UpgradeTester):
         """ Validate counter support """
         cursor = self.prepare()
 
-        cursor.execute("""
+        logger.debug('*** VERSION FAMILY: ' + str(self.UPGRADE_PATH.upgrade_meta.family))
+        logger.debug('*** VERSION: ' + str(self.cluster.version()))
+
+        create_table_query = """
             CREATE TABLE clicks (
                 userid int,
                 url text,
                 total counter,
                 PRIMARY KEY (userid, url)
-            ) WITH COMPACT STORAGE;
-        """)
+            )
+        """
 
-        #4.0 doesn't support compact storage
-        if self.is_40_or_greater():
-            cursor.execute("ALTER TABLE clicks DROP COMPACT STORAGE;")
+        if self.cluster.version() >= LooseVersion('4.0'):
+            cursor.execute(create_table_query)
+        else:
+            cursor.execute(create_table_query + '  WITH COMPACT STORAGE')
+
+            # 4.0 doesn't support compact storage
+            if self.is_40_or_greater():
+                cursor.execute("ALTER TABLE clicks DROP COMPACT STORAGE")
 
         for is_upgraded, cursor in self.do_upgrade(cursor):
             logger.debug("Querying {} node".format("upgraded" if is_upgraded else "old"))
@@ -5499,12 +5507,20 @@ class TestCQL(UpgradeTester):
         cursor.execute("CREATE KEYSPACE foo WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}")
         cursor.execute("CREATE TABLE foo.test1 (k int, t int, v int, PRIMARY KEY(k, t))")
 
-        cursor.execute("""
-            CREATE MATERIALIZED VIEW foo.view1
-            AS SELECT * FROM foo.test1
-            WHERE v IS NOT NULL AND t IS NOT NULL
-            PRIMARY KEY (k, v, t)
-        """)
+        if self.is_40_or_greater():
+            cursor.execute("""
+                CREATE MATERIALIZED VIEW foo.view1
+                AS SELECT * FROM foo.test1
+                WHERE k IS NOT NULL AND v IS NOT NULL AND t IS NOT NULL
+                PRIMARY KEY (k, v, t)
+            """)
+        else:
+            cursor.execute("""
+                CREATE MATERIALIZED VIEW foo.view1
+                AS SELECT * FROM foo.test1
+                WHERE v IS NOT NULL AND t IS NOT NULL
+                PRIMARY KEY (k, v, t)
+            """)
 
         for i in range(0, 10):
             cursor.execute("INSERT INTO foo.test1(k, t, v) VALUES (0, %d, %d)" % (i, 10 - i - 1))
