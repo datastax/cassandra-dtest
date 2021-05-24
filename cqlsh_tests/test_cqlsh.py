@@ -24,6 +24,7 @@ from cassandra import InvalidRequest
 from cassandra.concurrent import execute_concurrent_with_args
 from cassandra.query import BatchStatement, BatchType
 from ccmlib import common
+from ccmlib.node import ToolError
 
 from .cqlsh_tools import monkeypatch_driver, unmonkeypatch_driver
 from dtest import Tester, create_ks, create_cf
@@ -2875,6 +2876,50 @@ class TestCqlshSmoke(Tester, CqlshMixin):
    8 |     恵比毛勢須 | 酔ひもせず |     ゑひもせす
 """
         assert stdout_lines_sorted.find(expected) >= 0
+
+    @since('4.0')
+    def test_no_file_io(self):
+        def run_cqlsh_catch_toolerror(cmd, env):
+            """
+            run_cqlsh will throw ToolError if cqlsh exits with a non-zero exit code.
+            """
+            out = ""
+            err = ""
+            try:
+                out, err, _ = self.node1.run_cqlsh(cmd, env)
+            except ToolError as e:
+                return e.stdout, e.stderr
+            return out, err
+
+        create_ks(self.session, 'foo', rf=1)
+        create_cf(self.session, 'bar', key_type='int', columns={'name': 'text'})
+
+        cqlsh_stdout, cqlsh_stderr, _ = self.node1.run_cqlsh('COPY foo.bar TO \'/dev/null\';', [])
+        assert '0 rows exported to 1 files' in cqlsh_stdout
+        assert cqlsh_stderr == ''
+        cqlsh_stdout, cqlsh_stderr = run_cqlsh_catch_toolerror('COPY foo.bar TO \'/dev/null\';', ['--no-file-io'])
+        assert cqlsh_stdout == ''
+        assert 'No file I/O permitted' in cqlsh_stderr
+
+        cqlsh_stdout, cqlsh_stderr = run_cqlsh_catch_toolerror('DEBUG', [])
+        assert '(Pdb)' in cqlsh_stdout
+        cqlsh_stdout, cqlsh_stderr = run_cqlsh_catch_toolerror('DEBUG', ['--no-file-io'])
+        assert cqlsh_stdout == ''
+        assert 'No file I/O permitted' in cqlsh_stderr
+
+        cqlsh_stdout, cqlsh_stderr = run_cqlsh_catch_toolerror('CAPTURE \'nah\'', [])
+        assert cqlsh_stdout == 'Now capturing query output to \'nah\'.\n'
+        assert cqlsh_stderr == ''
+        cqlsh_stdout, cqlsh_stderr = run_cqlsh_catch_toolerror('CAPTURE \'nah\'', ['--no-file-io'])
+        assert cqlsh_stdout == ''
+        assert 'No file I/O permitted' in cqlsh_stderr
+
+        cqlsh_stdout, cqlsh_stderr = run_cqlsh_catch_toolerror('SOURCE \'nah\'', [])
+        assert cqlsh_stdout == ''
+        assert cqlsh_stderr == ''
+        cqlsh_stdout, cqlsh_stderr = run_cqlsh_catch_toolerror('SOURCE \'nah\'', ['--no-file-io'])
+        assert cqlsh_stdout == ''
+        assert 'No file I/O permitted' in cqlsh_stderr
 
 
 class TestCqlLogin(Tester, CqlshMixin):
