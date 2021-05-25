@@ -2596,23 +2596,40 @@ class TestCqlshSmoke(Tester, CqlshMixin):
             """
             run_cqlsh will throw ToolError if cqlsh exits with a non-zero exit code.
             """
+            out = ""
+            err = ""
             try:
                 out, err, _ = self.node1.run_cqlsh(cmd, env)
             except ToolError as e:
                 return e.stdout, e.stderr
+            return out, err
 
-        cqlsh_stdout, cqlsh_stderr, = run_cqlsh_catch_toolerror('COPY foo.bar FROM \'blah\';', ['--no-file-io'])
+        create_ks(self.session, 'foo', rf=1)
+        create_cf(self.session, 'bar', key_type='int', columns={'name': 'text'})
+
+        cqlsh_stdout, cqlsh_stderr, _ = self.node1.run_cqlsh('COPY foo.bar TO \'/dev/null\';', [])
+        assert '0 rows exported to 1 files' in cqlsh_stdout
+        assert cqlsh_stderr == ''
+        cqlsh_stdout, cqlsh_stderr = run_cqlsh_catch_toolerror('COPY foo.bar TO \'/dev/null\';', ['--no-file-io'])
         assert cqlsh_stdout == ''
         assert 'No file I/O permitted' in cqlsh_stderr
 
+        cqlsh_stdout, cqlsh_stderr = run_cqlsh_catch_toolerror('DEBUG', [])
+        assert '(Pdb)' in cqlsh_stdout
         cqlsh_stdout, cqlsh_stderr = run_cqlsh_catch_toolerror('DEBUG', ['--no-file-io'])
         assert cqlsh_stdout == ''
         assert 'No file I/O permitted' in cqlsh_stderr
 
+        cqlsh_stdout, cqlsh_stderr = run_cqlsh_catch_toolerror('CAPTURE \'nah\'', [])
+        assert cqlsh_stdout == 'Now capturing query output to \'nah\'.\n'
+        assert cqlsh_stderr == ''
         cqlsh_stdout, cqlsh_stderr = run_cqlsh_catch_toolerror('CAPTURE \'nah\'', ['--no-file-io'])
         assert cqlsh_stdout == ''
         assert 'No file I/O permitted' in cqlsh_stderr
 
+        cqlsh_stdout, cqlsh_stderr = run_cqlsh_catch_toolerror('SOURCE \'nah\'', [])
+        assert cqlsh_stdout == ''
+        assert cqlsh_stderr == ''
         cqlsh_stdout, cqlsh_stderr = run_cqlsh_catch_toolerror('SOURCE \'nah\'', ['--no-file-io'])
         assert cqlsh_stdout == ''
         assert 'No file I/O permitted' in cqlsh_stderr
