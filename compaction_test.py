@@ -339,7 +339,10 @@ class TestCompaction(Tester):
         Check that we log a warning when the partition size is bigger than compaction_large_partition_warning_threshold_mb
         """
         cluster = self.cluster
-        cluster.set_configuration_options({'compaction_large_partition_warning_threshold_mb': 1})
+        if cluster.version() >= '4.0':
+            cluster.set_configuration_options({'guardrails': {'partition_size_warn_threshold_in_mb': 1}})
+        else:
+            cluster.set_configuration_options({'compaction_large_partition_warning_threshold_mb': 1})
         cluster.populate(1).start()
         [node] = cluster.nodelist()
 
@@ -360,8 +363,8 @@ class TestCompaction(Tester):
 
         node.nodetool('compact ks large')
         verb = 'Writing' if self.cluster.version() > '2.2' else 'Compacting'
-        sizematcher = '\d+ bytes' if self.cluster.version() < LooseVersion('3.6') else '\d+\.\d{3}(K|M|G)iB'
-        node.watch_log_for('{} large partition ks/large:user \({}'.format(verb, sizematcher), from_mark=mark, timeout=180)
+        sizematcher = '\d+ bytes' if self.cluster.version() < LooseVersion('3.6') else '\d+\.?\d{,3}(K|M|G)B'
+        node.watch_log_for('Detected partition \'user\' in ks.large of size {} is greater than the maximum recommended size \({}\)'.format(sizematcher, sizematcher), from_mark=mark, timeout=180)
 
         ret = list(session.execute("SELECT properties from ks.large where userid = 'user'"))
         assert_length_equal(ret, 1)
