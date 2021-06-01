@@ -578,10 +578,16 @@ class TestAuth(AbstractTestAuth):
         * Create a new user, 'cathy', with no permissions
         * Create a ks, table
         * Connect as cathy
+        *
         * Try CREATE MV without ALTER permission on base table, assert throws Unauthorized
         * Grant cathy ALTER permissions, then CREATE MV successfully
+        *
+        * Try to MODIFY base without WRITE permission on base, assert throws Unauthorized
+        * Grant cathy WRITE permissions on base, and modify base successfully
+        *
         * Try to SELECT from the mv, assert throws Unauthorized
-        * Grant cathy SELECT permissions, and read from the MV successfully
+        * Grant cathy SELECT permissions on base, and read from the MV successfully
+        *
         * Revoke cathy's ALTER permissions, assert DROP MV throws Unauthorized
         * Restore cathy's ALTER permissions, DROP MV successfully
         """
@@ -602,12 +608,36 @@ class TestAuth(AbstractTestAuth):
         cassandra.execute("GRANT ALTER ON ks.cf TO cathy")
         cathy.execute(create_mv)
 
-        # TRY SELECT MV without SELECT permission on base table
-        assert_unauthorized(cathy, "SELECT * FROM ks.mv1", "User cathy has no SELECT permission on <table ks.cf> or any of its parents")
+        # Try MODIFY base without WRITE permission on base
+        assert_unauthorized(cathy, "INSERT INTO ks.cf(id, value) VALUES(1, '1')", "User cathy has no MODIFY permission on <table ks.cf> or any of its parents")
 
-        # Grant SELECT permission and CREATE MV
-        cassandra.execute("GRANT SELECT ON ks.cf TO cathy")
-        cathy.execute("SELECT * FROM ks.mv1")
+        if self.cluster.version() >= LooseVersion('4.0'):
+            # From 4.0 onward, only base MODIFY permission is required to update base with MV
+            # Grant WRITE permission on Base
+            cassandra.execute("GRANT MODIFY ON ks.cf TO cathy")
+            cathy.execute("INSERT INTO ks.cf(id, value) VALUES(1, '1')")
+
+            # TRY SELECT MV without SELECT permission on base table
+            assert_unauthorized(cathy, "SELECT * FROM ks.cf", "User cathy has no SELECT permission on <table ks.cf> or any of its parents")
+            assert_unauthorized(cathy, "SELECT * FROM ks.mv1", "User cathy has no SELECT permission on <table ks.cf> or any of its parents")
+
+            # Grant SELECT permission
+            cassandra.execute("GRANT SELECT ON ks.cf TO cathy")
+            assert_one(cathy, "SELECT * FROM ks.cf", [1, '1'])
+            assert_one(cathy, "SELECT * FROM ks.mv1", ['1', 1])
+        else:
+            # Before 4.0, MODIFY on MV is required to insert to base
+            # Grant WRITE permission on Base
+            cassandra.execute("GRANT MODIFY ON ks.cf TO cathy")
+            assert_unauthorized(cathy, "INSERT INTO ks.cf(id, value) VALUES(1, '1')", "User cathy has no SELECT permission on <table ks.cf> or any of its parents")
+            cassandra.execute("GRANT SELECT ON ks.cf TO cathy")
+            assert_unauthorized(cathy, "INSERT INTO ks.cf(id, value) VALUES(1, '1')", "User cathy has no MODIFY permission on <table ks.mv1> or any of its parents")
+
+            # Grant WRITE permission on MV
+            cassandra.execute("GRANT MODIFY ON ks.mv1 TO cathy")
+            cathy.execute("INSERT INTO ks.cf(id, value) VALUES(1, '1')")
+            assert_one(cathy, "SELECT * FROM ks.cf", [1, '1'])
+            assert_one(cathy, "SELECT * FROM ks.mv1", ['1', 1])
 
         # Revoke ALTER permission and try DROP MV
         cassandra.execute("REVOKE ALTER ON ks.cf FROM cathy")
