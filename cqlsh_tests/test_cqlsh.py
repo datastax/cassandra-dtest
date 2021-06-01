@@ -1896,16 +1896,16 @@ Tracing session:""")
             assert error_msg in stderr
 
         expect_error('CONSISTENCY', ['--consistency-level', 'foop'],
-                     '"foop" is not a valid consistency level, falling back to ONE')
+                     '"foop" is not a valid consistency level')
 
         expect_error('CONSISTENCY', ['--consistency-level', 'serial'],
-                     '"serial" is not a valid consistency level, falling back to ONE')
+                     '"serial" is not a valid consistency level')
 
         expect_error('SERIAL CONSISTENCY', ['--serial-consistency-level', 'foop'],
-                     '"foop" is not a valid serial consistency level, falling back to SERIAL')
+                     '"foop" is not a valid serial consistency level')
 
         expect_error('SERIAL CONSISTENCY', ['--serial-consistency-level', 'ONE'],
-                     '"ONE" is not a valid serial consistency level, falling back to SERIAL')
+                     '"ONE" is not a valid serial consistency level')
 
     @since('3.0.19')
     def test_protocol_negotiation(self):
