@@ -3423,19 +3423,31 @@ class TestPagingWithDeletions(BasePagingTester, PageAssertionMixin):
         supports_v5_protocol = self.supports_v5_protocol(self.cluster.version())
 
         self.fixture_dtest_setup.allow_log_errors = True
+        supports_guardrails = self.cluster.version() >= LooseVersion('4.0')
+        if supports_guardrails:
+            config_opts = {'guardrails': {'tombstone_failure_threshold': 500,
+                                          'tombstone_warn_threshold': -1,
+                                          'write_consistency_levels_disallowed': {}},
+                           'tombstone_failure_threshold': 0,
+                           'tombstone_warn_threshold': 0}
+        else:
+            config_opts = {'tombstone_failure_threshold': 500}
         self.cluster.set_configuration_options(
             values={'tombstone_failure_threshold': 500}
         )
         self.session = self.prepare()
         self.setup_data()
 
-        # Add more data
+        if supports_guardrails:
+            # cell tombstones are not counted towards the threshold, so we delete rows
+            query = "delete from paging_test where id = 1 and mytext = '{}'"
+        else:
+            # Add more data
+            query = "insert into paging_test (id, mytext, col1) values (1, '{}', null)"
+
         values = [uuid.uuid4() for i in range(3000)]
         for value in values:
-            self.session.execute(SimpleStatement(
-                "insert into paging_test (id, mytext, col1) values (1, '{}', null) ".format(
-                    value
-                ),
+            self.session.execute(SimpleStatement(query.format(value),
                 consistency_level=CL.ALL
             ))
 
@@ -3456,7 +3468,7 @@ class TestPagingWithDeletions(BasePagingTester, PageAssertionMixin):
             failure_msg = ("Scanned over.* tombstones in test_paging_size."
                            "paging_test.* query aborted")
         else:
-            failure_msg = ("Scanned over.* tombstones during query.* query aborted")
+            failure_msg = ("Scanned over.* (tombstones|tombstone rows) during query.* query aborted")
 
         self.cluster.wait_for_any_log(failure_msg, 25)
 

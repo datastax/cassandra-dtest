@@ -1810,8 +1810,12 @@ Tracing session:""")
         """
         max_partitions_per_batch = 5
         self.cluster.populate(3)
-        self.cluster.set_configuration_options({
-            'unlogged_batch_across_partitions_warn_threshold': str(max_partitions_per_batch)})
+
+        if self.cluster.version() >= LooseVersion('4.0'):  # batch size thresholds moved to guardrails in 4.0
+            config_opts = {"guardrails": {'unlogged_batch_across_partitions_warn_threshold': str(max_partitions_per_batch)}}
+        else:
+            config_opts = {'unlogged_batch_across_partitions_warn_threshold': str(max_partitions_per_batch)}
+        self.cluster.set_configuration_options(config_opts)
 
         self.cluster.start()
 
