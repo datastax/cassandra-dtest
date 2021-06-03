@@ -1,6 +1,7 @@
 import logging
 import time
 import pytest
+import re
 
 from cassandra import InvalidRequest
 
@@ -61,7 +62,8 @@ class TestGuardrails(BaseGuardrailsTester):
         for x in range(rows):
             try:
                 session2.execute("INSERT INTO t(id, v) VALUES({v}, {v})".format(v=x))
-            except InvalidRequest:
+            except InvalidRequest as e:
+                assert re.search("Write request failed because disk usage exceeds failure threshold", str(e))
                 failed = failed + 1
 
         assert rows != failed, "Expect node2 rejects some writes, but rejected all"
