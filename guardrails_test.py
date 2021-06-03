@@ -77,9 +77,7 @@ class TestGuardrails(BaseGuardrailsTester):
         for x in range(rows):
             fut = session2.execute_async("INSERT INTO t(id, v) VALUES({v}, {v})".format(v=x))
             fut.result()
-            print(fut)
             if fut.warnings:
-                print(fut.warnings)
                 assert ["Replica disk usage exceeds warn threshold"] == fut.warnings
                 warnings = warnings + 1
 

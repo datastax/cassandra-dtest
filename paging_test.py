@@ -18,6 +18,7 @@ from tools.assertions import (assert_all, assert_invalid, assert_length_equal,
                               assert_one, assert_lists_equal_ignoring_order)
 from tools.data import rows_to_list
 from tools.datahelp import create_rows, flatten_into_set, parse_data_into_dicts
+from tools.misc import restart_cluster_and_update_config
 from tools.paging import PageAssertionMixin, PageFetcher
 
 since = pytest.mark.since
@@ -3423,22 +3424,17 @@ class TestPagingWithDeletions(BasePagingTester, PageAssertionMixin):
         supports_v5_protocol = self.supports_v5_protocol(self.cluster.version())
 
         self.fixture_dtest_setup.allow_log_errors = True
-        supports_guardrails = self.cluster.version() >= LooseVersion('4.0')
-        if supports_guardrails:
+        if self.supports_guardrails:
             config_opts = {'guardrails': {'tombstone_failure_threshold': 500,
                                           'tombstone_warn_threshold': -1,
-                                          'write_consistency_levels_disallowed': {}},
-                           'tombstone_failure_threshold': 0,
-                           'tombstone_warn_threshold': 0}
+                                          'write_consistency_levels_disallowed': {}}}
         else:
             config_opts = {'tombstone_failure_threshold': 500}
-        self.cluster.set_configuration_options(
-            values={'tombstone_failure_threshold': 500}
-        )
+        restart_cluster_and_update_config(self.cluster, config_opts)
         self.session = self.prepare()
         self.setup_data()
 
-        if supports_guardrails:
+        if self.supports_guardrails:
             # cell tombstones are not counted towards the threshold, so we delete rows
             query = "delete from paging_test where id = 1 and mytext = '{}'"
         else:
