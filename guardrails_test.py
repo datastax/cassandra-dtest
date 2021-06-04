@@ -21,7 +21,8 @@ class BaseGuardrailsTester(Tester):
             extra_jvm_args = []
 
         cluster = self.cluster
-        cluster.populate([nodes, 0], install_byteman=install_byteman)
+        cluster.set_log_level('TRACE')
+        cluster.populate(nodes, install_byteman=install_byteman)
         if options:
             cluster.set_configuration_options(values=options)
 
@@ -52,8 +53,9 @@ class TestGuardrails(BaseGuardrailsTester):
         session.execute("CREATE TABLE t (id int PRIMARY KEY, v int)")
 
         logger.debug("Inject FULL to node1, expect log on node1 and node2 rejects writes")
+        mark = node1.mark_log()
         self.disk_usage_injection(node1, "full", False)
-        time.sleep(2)  # wait for disk state broadcast
+        node1.watch_log_for("Adding state DISK_USAGE: FULL", filename='debug.log', from_mark=mark, timeout=10)
 
         # verify node2 will reject writes if node1 is the replica
         session2 = self.patient_exclusive_cql_connection(node2, keyspace="ks")
@@ -72,8 +74,9 @@ class TestGuardrails(BaseGuardrailsTester):
 
         logger.debug("Inject STUFFED to node1, node2 should warn client")
         session2.execute("TRUNCATE t")
+        mark = node1.mark_log()
         self.disk_usage_injection(node1, "stuffed")
-        time.sleep(2)  # wait for disk state broadcast
+        node1.watch_log_for("Adding state DISK_USAGE: STUFFED", filename='debug.log', from_mark=mark, timeout=10)
 
         warnings = 0
         for x in range(rows):
