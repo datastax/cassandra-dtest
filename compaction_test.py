@@ -364,10 +364,10 @@ class TestCompaction(Tester):
         node.nodetool('compact ks large')
         verb = 'Writing' if self.cluster.version() > '2.2' else 'Compacting'
         sizematcher = '\d+ bytes' if self.cluster.version() < LooseVersion('3.6') else '\d+\.\d{3}(K|M|G)iB'
-        if cluster.version() >= '4.0':
-            node.watch_log_for("Detected partition 'user' in ks.large of size 2MB is greater than the maximum recommended size \(1MB\)", from_mark=mark, timeout=180)
-        else:
-            node.watch_log_for('{} large partition ks/large:user \({}'.format(verb, sizematcher), from_mark=mark, timeout=180)
+        log_message = '{} large partition ks/large:user \({}'.format(verb, sizematcher)
+        if self.supports_guardrails:
+            log_message = "Detected partition 'user' in ks.large of size 2MB is greater than the maximum recommended size \(1MB\)"
+        node.watch_log_for(log_message, from_mark=mark, timeout=180)
 
         ret = list(session.execute("SELECT properties from ks.large where userid = 'user'"))
         assert_length_equal(ret, 1)
