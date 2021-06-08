@@ -1,0 +1,8 @@
+RULE return FULL disk usage
+CLASS org.apache.cassandra.service.disk.usage.DiskUsageMonitor
+METHOD getState
+AT EXIT
+IF TRUE
+DO
+    return org.apache.cassandra.service.disk.usage.DiskUsageState.FULL;
+ENDRULE
