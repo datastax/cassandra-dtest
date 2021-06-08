@@ -1865,8 +1865,11 @@ Tracing session:""")
         """
         max_partitions_per_batch = 5
         self.cluster.populate(3)
-        self.cluster.set_configuration_options({
-            'unlogged_batch_across_partitions_warn_threshold': str(max_partitions_per_batch)})
+
+        config_opts = {'unlogged_batch_across_partitions_warn_threshold': str(max_partitions_per_batch)}
+        if self.supports_guardrails:
+            config_opts = {"guardrails": config_opts}
+        self.cluster.set_configuration_options(config_opts)
 
         self.cluster.start()
 
