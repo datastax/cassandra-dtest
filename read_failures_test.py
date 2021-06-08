@@ -4,6 +4,7 @@ import pytest
 from cassandra import ConsistencyLevel, ReadFailure, ReadTimeout
 from cassandra.policies import FallthroughRetryPolicy
 from cassandra.query import SimpleStatement
+from distutils.version import LooseVersion
 
 from dtest import Tester
 
@@ -21,7 +22,9 @@ class TestReadFailures(Tester):
     @pytest.fixture(autouse=True)
     def fixture_add_additional_log_patterns(self, fixture_dtest_setup):
         fixture_dtest_setup.ignore_log_patterns = (
-            "Scanned over [1-9][0-9]* tombstones",  # This is expected when testing read failures due to tombstones
+            # These are expected when testing read failures due to tombstones,
+            "Scanned over [1-9][0-9]* tombstones",
+            "Scanned over [1-9][0-9]* tombstone rows",
         )
         return fixture_dtest_setup
 
@@ -33,9 +36,15 @@ class TestReadFailures(Tester):
         self.expected_expt = ReadFailure
 
     def _prepare_cluster(self):
-        self.cluster.set_configuration_options(
-            values={'tombstone_failure_threshold': self.tombstone_failure_threshold}
-        )
+        if self.supports_guardrails:
+            self.cluster.set_configuration_options(
+                values={'guardrails': {'tombstone_warn_threshold': -1,
+                                       'tombstone_failure_threshold': self.tombstone_failure_threshold}}
+            )
+        else:
+            self.cluster.set_configuration_options(
+                values={'tombstone_failure_threshold': self.tombstone_failure_threshold}
+            )
         self.cluster.populate(3)
         self.cluster.start()
         self.nodes = list(self.cluster.nodes.values())

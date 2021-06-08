@@ -18,6 +18,7 @@ from tools.assertions import (assert_all, assert_invalid, assert_length_equal,
                               assert_one, assert_lists_equal_ignoring_order)
 from tools.data import rows_to_list
 from tools.datahelp import create_rows, flatten_into_set, parse_data_into_dicts
+from tools.misc import restart_cluster_and_update_config
 from tools.paging import PageAssertionMixin, PageFetcher
 
 since = pytest.mark.since
@@ -3423,19 +3424,26 @@ class TestPagingWithDeletions(BasePagingTester, PageAssertionMixin):
         supports_v5_protocol = self.supports_v5_protocol(self.cluster.version())
 
         self.fixture_dtest_setup.allow_log_errors = True
-        self.cluster.set_configuration_options(
-            values={'tombstone_failure_threshold': 500}
-        )
+        if self.supports_guardrails:
+            config_opts = {'guardrails': {'tombstone_failure_threshold': 500,
+                                          'tombstone_warn_threshold': -1,
+                                          'write_consistency_levels_disallowed': {}}}
+        else:
+            config_opts = {'tombstone_failure_threshold': 500}
+        restart_cluster_and_update_config(self.cluster, config_opts)
         self.session = self.prepare()
         self.setup_data()
 
-        # Add more data
+        if self.supports_guardrails:
+            # cell tombstones are not counted towards the threshold, so we delete rows
+            query = "delete from paging_test where id = 1 and mytext = '{}'"
+        else:
+            # Add more data
+            query = "insert into paging_test (id, mytext, col1) values (1, '{}', null)"
+
         values = [uuid.uuid4() for i in range(3000)]
         for value in values:
-            self.session.execute(SimpleStatement(
-                "insert into paging_test (id, mytext, col1) values (1, '{}', null) ".format(
-                    value
-                ),
+            self.session.execute(SimpleStatement(query.format(value),
                 consistency_level=CL.ALL
             ))
 
@@ -3456,7 +3464,7 @@ class TestPagingWithDeletions(BasePagingTester, PageAssertionMixin):
             failure_msg = ("Scanned over.* tombstones in test_paging_size."
                            "paging_test.* query aborted")
         else:
-            failure_msg = ("Scanned over.* tombstones during query.* query aborted")
+            failure_msg = ("Scanned over.* (tombstones|tombstone rows) during query.* query aborted")
 
         self.cluster.wait_for_any_log(failure_msg, 25)
 
