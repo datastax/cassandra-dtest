@@ -16,3 +16,4 @@ bin/
 lib/
 pyvenv.cfg
 src/
+.vscode/
