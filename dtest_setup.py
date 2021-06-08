@@ -372,6 +372,10 @@ class DTestSetup(object):
     def supports_v5_protocol(self, cluster_version):
         return cluster_version >= LooseVersion('4.0')
 
+    def supports_guardrails(self):
+        return self.cluster.version() >= LooseVersion('4.0')
+
+
     def cleanup_last_test_dir(self):
         if os.path.exists(self.last_test_dir):
             os.remove(self.last_test_dir)
