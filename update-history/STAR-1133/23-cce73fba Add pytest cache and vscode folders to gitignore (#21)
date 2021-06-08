@@ -1,0 +1,10 @@
+--- a/.gitignore
++++ b/.gitignore
+@@ -11,7 +11,4 @@
+ html/
+ doxygen/doxypy-0.4.2/
+ .pytest_cache/
+-<<<<<<<
+-=======
+ .vscode/
+->>>>>>>
