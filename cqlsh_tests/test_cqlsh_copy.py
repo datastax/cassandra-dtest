@@ -2475,8 +2475,12 @@ class TestCqlshCopy(Tester):
 
         @jira_ticket CASSANDRA-9302
         """
+        config_opts = {'batch_size_warn_threshold_in_kb': '10'}
+        if self.supports_guardrails:  # batch size thresholds moved to guardrails in 4.0
+            config_opts = {'guardrails': config_opts}
+
         self._test_bulk_round_trip(nodes=3, partitioner="murmur3", num_operations=10000,
-                                   configuration_options={'batch_size_warn_threshold_in_kb': '10'},
+                                   configuration_options=config_opts,
                                    profile=os.path.join(os.path.dirname(os.path.realpath(__file__)), 'blogposts.yaml'),
                                    stress_table='stresscql.blogposts')
 
@@ -2489,9 +2493,16 @@ class TestCqlshCopy(Tester):
 
         @jira_ticket CASSANDRA-10938
         """
+        batch_size_warn_threshold_in_kb = '10'
+        native_transport_max_concurrent_connections = '12'
+        if self.supports_guardrails:  # batch size thresholds moved to guardrails in 4.0
+            config_opts = {'guardrails': {'batch_size_warn_threshold_in_kb': batch_size_warn_threshold_in_kb},
+                           'native_transport_max_concurrent_connections': native_transport_max_concurrent_connections}
+        else:
+            config_opts = {'native_transport_max_concurrent_connections': native_transport_max_concurrent_connections,
+                           'batch_size_warn_threshold_in_kb': batch_size_warn_threshold_in_kb}
         self._test_bulk_round_trip(nodes=3, partitioner="murmur3", num_operations=10000,
-                                   configuration_options={'native_transport_max_concurrent_connections': '12',
-                                                          'batch_size_warn_threshold_in_kb': '10'},
+                                   configuration_options=config_opts,
                                    profile=os.path.join(os.path.dirname(os.path.realpath(__file__)), 'blogposts.yaml'),
                                    stress_table='stresscql.blogposts',
                                    copy_to_options={'NUMPROCESSES': 5, 'MAXATTEMPTS': 20},
@@ -2821,8 +2832,13 @@ class TestCqlshCopy(Tester):
         @jira_ticket CASSANDRA-11474
         """
         num_records = 100
-        self.prepare(nodes=1, configuration_options={'batch_size_warn_threshold_in_kb': '1',   # warn with 1kb and fail
-                                                     'batch_size_fail_threshold_in_kb': '5'})  # with 5kb size batches
+        batch_size_warn_threshold_in_kb = '1'   # warn with 1kb and fail
+        batch_size_fail_threshold_in_kb = '5'   # with 5kb size batches
+        config_opts = {'batch_size_warn_threshold_in_kb': batch_size_warn_threshold_in_kb,
+                       'batch_size_fail_threshold_in_kb': batch_size_fail_threshold_in_kb}
+        if self.supports_guardrails:  # batch size thresholds moved to guardrails in 4.0
+            config_opts = {'guardrails': config_opts}
+        self.prepare(nodes=1, configuration_options=config_opts)
 
         logger.debug('Running stress')
         stress_table_name = 'standard1'
