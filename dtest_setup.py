@@ -377,6 +377,15 @@ class DTestSetup(object):
     def supports_v5_protocol(self, cluster_version):
         return cluster_version >= LooseVersion('4.0')
 
+    def supports_cc4_guardrails(self):
+        """ Supports CC4 custom guardrails
+
+        If no nodes in the cluster to check for is_converged_core() then we just assume it is converged core.
+        """
+        return ((0 == len(self.cluster.nodelist()) or self.cluster.nodelist()[0].is_converged_core())
+                and self.cluster.version() >= LooseVersion('4.0') and self.cluster.version() < LooseVersion('5.0'))
+
+
     def cleanup_last_test_dir(self):
         if os.path.exists(self.last_test_dir):
             os.remove(self.last_test_dir)

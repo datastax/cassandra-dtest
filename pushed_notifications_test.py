@@ -387,11 +387,16 @@ class TestVariousNotifications(Tester):
         have_v5_protocol = self.supports_v5_protocol(self.cluster.version())
 
         self.fixture_dtest_setup.allow_log_errors = True
-        opts={
-            'tombstone_failure_threshold': 500,
-            'read_request_timeout_in_ms': 30000,  # 30 seconds
-            'range_request_timeout_in_ms': 40000
-        }
+        opts={}
+        if self.supports_cc4_guardrails():
+            opts = {'guardrails': {'tombstone_warn_threshold': -1,
+                                   'tombstone_failure_threshold': 500},
+                                   'read_request_timeout_in_ms': 30000,  # 30 seconds
+                                   'range_request_timeout_in_ms': 40000}
+        else:
+            opts = {'tombstone_failure_threshold': 500,
+                    'read_request_timeout_in_ms': 30000,  # 30 seconds
+                    'range_request_timeout_in_ms': 40000}
         if self.cluster.cassandra_version() >= LooseVersion('4.1.6') and not str(self.cluster.cassandra_version()).startswith(('5.0-alpha', '5.0-beta')):
             opts['native_transport_timeout'] = '30s'
         self.cluster.set_configuration_options(values=opts)
@@ -407,17 +412,17 @@ class TestVariousNotifications(Tester):
             "PRIMARY KEY (id, mytext) )"
         )
 
-        # Add data with tombstones
+        if self.supports_cc4_guardrails():
+            # cell tombstones are not counted towards the threshold, so we delete rows
+            query = "delete from test where id = 1 and mytext = '{}'"
+        else:
+            # Add data with tombstones
+            query = "insert into test (id, mytext, col1) values (1, '{}', null)"
         values = [str(i) for i in range(1000)]
         for value in values:
-            session.execute(SimpleStatement(
-                "insert into test (id, mytext, col1) values (1, '{}', null) ".format(
-                    value
-                ),
-                consistency_level=CL.ALL
-            ))
+            session.execute(SimpleStatement(query.format(value),consistency_level=CL.ALL))
 
-        failure_msg = ("Scanned over.* tombstones.* query aborted")
+        failure_msg = ("Scanned over.* (tombstones|tombstone rows).* query aborted")
 
         @pytest.mark.timeout(25)
         def read_failure_query():
