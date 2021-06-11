@@ -1225,6 +1225,40 @@ class TestRepair(BaseRepairTest):
         else:
             node1.nodetool('repair keyspace1 standard1 -inc -par')
 
+    @since('3.0')
+    def test_repair_one_node_cluster(self):
+        options = []
+        fix_STAR582 = self.cluster.version() >= "4.0"
+        if not fix_STAR582:
+            options = ['--ignore-unreplicated-keyspaces'] + options
+        self._repair_abort_test(options=options, nodes=1, rf=2)
+
+    @since('3.0')
+    def test_repair_one_node_in_local_dc(self):
+        self._repair_abort_test(options=['--ignore-unreplicated-keyspaces', '--in-local-dc'], nodes=[1, 1], rf={'dc1': 1, 'dc2': 1}, no_common_range=True)
+
+    def _repair_abort_test(self, options=[], nodes=1, rf=1, no_common_range=False):
+        cluster = self.cluster
+        logger.debug("Starting cluster..")
+        cluster.populate(nodes).start(wait_for_binary_proto=True)
+        
+        node1 = self.cluster.nodelist()[0]
+        session = self.patient_cql_connection(node1)
+        create_ks(session, 'ks', rf=rf)
+
+        support_preview = self.cluster.version() >= "4.0"
+        if support_preview:
+            logger.debug("Preview repair")
+            out = node1.repair(["--preview"] + options)
+            if no_common_range:
+                assert "Nothing to repair for " in str(out), "Expect 'Nothing to repair for '"
+
+        logger.debug("Full repair")
+        node1.repair(["--full"] + options)
+
+        logger.debug("Incremental repair")
+        node1.repair(options)
+
     @since('2.2')
     def test_dead_sync_initiator(self):
         """
