@@ -98,6 +98,7 @@ class CqlshMixin():
             logger.debug("Cqlsh command stderr:\n" + stderr)
         return stdout, stderr
 
+
 class TestCqlsh(Tester, CqlshMixin):
 
     # override cluster options to enable user defined functions
