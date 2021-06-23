@@ -112,7 +112,7 @@ class TestHelper(Tester):
         if not common.is_win():  # nodetool always prints out on windows
             assert_length_equal(response, 0)  # nodetool does not print anything unless there is an error
 
-    def launch_standalone_scrub(self, ks, cf, reinsert_overflowed_ttl=False, no_validate=False):
+    def launch_standalone_scrub(self, ks, cf, reinsert_overflowed_ttl=False, no_validate=False, acceptable_errors=None):
         """
         Launch the standalone scrub
         """
@@ -136,7 +136,7 @@ class TestHelper(Tester):
         # if we have less than 64G free space, we get this warning - ignore it
         if err and "Consider adding more capacity" not in err.decode("utf-8"):
             logger.debug(err.decode("utf-8"))
-            assert_stderr_clean(err.decode("utf-8"))
+            assert_stderr_clean(err.decode("utf-8"), acceptable_errors)
 
     def perform_node_tool_cmd(self, cmd, table, indexes):
         """
@@ -163,12 +163,12 @@ class TestHelper(Tester):
         time.sleep(.1)
         return self.get_sstables(table, indexes)
 
-    def standalonescrub(self, table, *indexes):
+    def standalonescrub(self, table, *indexes, acceptable_errors=None):
         """
         Launch standalone scrub on table and indexes, and then return all sstables
         in a dict keyed by the table or index name.
         """
-        self.launch_standalone_scrub(KEYSPACE, table)
+        self.launch_standalone_scrub(ks=KEYSPACE, cf=table, acceptable_errors=acceptable_errors)
         for index in indexes:
             self.launch_standalone_scrub(KEYSPACE, '{}.{}'.format(table, index))
         return self.get_sstables(table, indexes)
@@ -478,7 +478,7 @@ class TestScrub(TestHelper):
 
         self.delete_non_essential_sstable_files('users')
 
-        scrubbed_sstables = self.standalonescrub('users')
+        scrubbed_sstables = self.standalonescrub(table='users', acceptable_errors=["WARN.*Could not recreate or deserialize existing bloom filter, continuing with a pass-through bloom filter but this will significantly impact reads performance"])
 
         if should_assert_sstables:
             self.increase_sstable_generations(initial_sstables)
