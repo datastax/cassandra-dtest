@@ -118,6 +118,9 @@ class TestHelper(Tester):
         """
         node1 = self.cluster.nodelist()[0]
         env = common.make_cassandra_env(node1.get_install_cassandra_root(), node1.get_node_cassandra_root())
+
+        self.dtest_config.apply_to_env(env, "JVM_OPTS")
+
         scrub_bin = node1.get_tool('sstablescrub')
         logger.debug(scrub_bin)
 
