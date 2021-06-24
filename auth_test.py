@@ -845,6 +845,9 @@ class TestAuth(Tester):
 
         assert_unauthorized(cathy, "SELECT * FROM ks.cf", "User cathy has no SELECT permission on <table ks.cf> or any of its parents")
 
+    # from 4.0 DROP/GRANT/REVOKE invalidate role and permissions caches immediately
+    # @jira_ticket STAR-590
+    @since('2.0', max_version='4')
     def test_permissions_caching(self):
         """
         * Launch a one node cluster, with a 2s permission cache
@@ -1924,9 +1927,11 @@ class TestAuthRoles(Tester):
 
         self.superuser.execute("REVOKE role1 FROM mike")
         # mike should retain permissions until the cache expires
+        # cache entries are invalidated on REVOKE in 4.0 @jira_ticket STAR-590
+        max_attempts = 1 if self.cluster.version() >= LooseVersion('4.0') else 20
         unauthorized = None
         cnt = 0
-        while not unauthorized and cnt < 20:
+        while not unauthorized and cnt < max_attempts:
             try:
                 as_mike.execute("SELECT * FROM ks.t1")
                 cnt += 1
