@@ -928,7 +928,9 @@ class BootstrapTester(Tester):
         # Repeat the select count(*) query, to help catch
         # bugs like 9484, where count(*) fails at higher
         # data loads.
+        logger.error(node1.nodetool('status').stdout)
         for _ in range(5):
+            logger.error("Executing SELECT to node2")
             assert_one(session, "SELECT count(*) from keyspace1.standard1", [500000], cl=ConsistencyLevel.ONE)
 
     def test_cleanup(self):
