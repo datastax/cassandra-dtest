@@ -157,3 +157,14 @@ def add_skip(cls, reason=""):
     else:
         cls.pytestmark = [pytest.mark.skip(reason)]
     return cls
+
+
+def restart_cluster_and_update_config(cluster, config):
+    """
+    Takes a new config, and applies it to a cluster. We need to restart
+    for it to take effect. We _could_ take a node here, but we don't want to.
+    If you really want to change the config of just one node, use JMX.
+    """
+    cluster.stop()
+    cluster.set_configuration_options(values=config)
+    cluster.start()
