@@ -40,7 +40,7 @@ class TestDropCompactStorage(Tester):
     def drop_compact_storage(self, session, assert_msg):
         try:
             session.execute("ALTER TABLE drop_compact_storage_test.test DROP COMPACT STORAGE")
-            self.fail("No exception has been thrown")
+            pytest.fail("No exception has been thrown")
         except InvalidRequest as e:
             assert assert_msg in str(e)
 
@@ -50,6 +50,7 @@ class TestDropCompactStorage(Tester):
         node.stop(wait_other_notice=False)
 
         node.set_install_dir(version=to_version)
+        node.set_configuration_options(values={'enable_drop_compact_storage': 'true'})
         node.start(wait_other_notice=False, wait_for_binary_proto=False, verbose=False)
 
     @since('3.0', max_version='3.11')
@@ -70,6 +71,7 @@ class TestDropCompactStorage(Tester):
             node.stop(wait_other_notice=False)
 
             self.set_node_to_current_version(node)
+            node.set_configuration_options(values={'enable_drop_compact_storage': 'true'})
             node.start(wait_for_binary_proto=True)
 
         session = self.patient_exclusive_cql_connection(node1)

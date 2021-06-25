@@ -20,7 +20,6 @@ from .upgrade_manifest import build_upgrade_pairs, CASSANDRA_4_0
 since = pytest.mark.since
 logger = logging.getLogger(__name__)
 
-
 def _create_dense_super_cf(thrift, name):
     cfdef = Cassandra.CfDef('ks', name, column_type='Super',
                            key_validation_class='AsciiType',        # pk
@@ -205,12 +204,12 @@ class TestUpgradeSuperColumnsThrough(Tester):
         # Update Cassandra Directory
         for node in nodes:
             node.set_install_dir(version=tag)
-            node.set_configuration_options(values={'start_rpc': 'true'})
+            node.set_configuration_options(values={'start_rpc': 'true', 'enable_drop_compact_storage': 'true'})
             logger.debug("Set new cassandra dir for %s: %s" % (node.name, node.get_install_dir()))
         self.cluster.set_install_dir(version=tag)
         self.fixture_dtest_setup.reinitialize_cluster_for_different_version()
         for node in nodes:
-            node.set_configuration_options(values={'start_rpc': 'true'})
+            node.set_configuration_options(values={'start_rpc': 'true', 'enable_drop_compact_storage': 'true'})
 
         # Restart nodes on new version
         for node in nodes:
@@ -229,7 +228,10 @@ class TestUpgradeSuperColumnsThrough(Tester):
 
         cluster.populate(num_nodes)
         for node in self.cluster.nodelist():
-            node.set_configuration_options(values={'start_rpc': 'true'})
+            if (cassandra_version > "github:apache/cassandra-2.2"):
+                node.set_configuration_options(values={'start_rpc': 'true', 'enable_drop_compact_storage': 'true'})
+            else:
+                node.set_configuration_options(values={'start_rpc': 'true'})
 
         cluster.start()
         return cluster
@@ -380,7 +382,6 @@ class TestUpgradeTo40(Tester):
     Thrift is dead in 4.0. However, we still want to ensure users that used thrift
      in 3.0 or earlier have an upgrade path to 4.0 and this class provides tests
      cases for this.
-
      Note that we don't want to run this if the "current" version (the one we're
      upgrading to) is not 4.0 or more, as the tests makes assumptions on that.
     """
@@ -389,7 +390,6 @@ class TestUpgradeTo40(Tester):
         Prepare the test, starting a cluster on the initial version, creating
         a keyspace (named 'ks') and returning a CQL and a thrift connection to
         the first node (and set on the created keyspace).
-
         :param start_version: the version to set the node at initially.
         :param num_nodes: the number of nodes to use.
         :param rf: replication factor for the keyspace created.
@@ -401,7 +401,7 @@ class TestUpgradeTo40(Tester):
 
         self.cluster.populate(num_nodes)
         for node in self.cluster.nodelist():
-            node.set_configuration_options(values={'start_rpc': 'true'})
+            node.set_configuration_options(values={'start_rpc': 'true', 'enable_drop_compact_storage': 'true'})
 
         self.cluster.start()
         logger.debug("Started node on %s", start_version)
@@ -427,7 +427,6 @@ class TestUpgradeTo40(Tester):
         """
         Upgrade all the nodes in the cluster to the "current" version (so 4.0+)
         in a rolling fashion.
-
         :param after_each_upgrade: if not None, a function that is called with 2
           arguments (in that order):
           - the index of the node we just upgraded.
@@ -563,7 +562,6 @@ class TestThrift(UpgradeTester):
     """
     Verify dense and sparse supercolumn functionality with and without renamed columns
     in 3.X after upgrading from 2.x.
-
     @jira_ticket CASSANDRA-12373
     """
 
