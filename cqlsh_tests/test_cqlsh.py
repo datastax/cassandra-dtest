@@ -23,6 +23,7 @@ from cassandra import InvalidRequest
 from cassandra.concurrent import execute_concurrent_with_args
 from cassandra.query import BatchStatement, BatchType
 from ccmlib import common
+from ccmlib.node import ToolError
 
 from .cqlsh_tools import monkeypatch_driver, unmonkeypatch_driver
 from dtest import Tester, create_ks, create_cf
@@ -91,6 +92,7 @@ class CqlshMixin():
             logger.debug("Cqlsh command stdout:\n" + stdout)
             logger.debug("Cqlsh command stderr:\n" + stderr)
         return stdout, stderr
+
 
 class TestCqlsh(Tester, CqlshMixin):
 
@@ -1103,6 +1105,7 @@ CREATE TYPE test.address_type (
             AND comment = ''
             AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', 'max_threshold': '32', 'min_threshold': '4'}
             AND compression = {'chunk_length_in_kb': '16', 'class': 'org.apache.cassandra.io.compress.LZ4Compressor'}
+            AND memtable = {}
             AND crc_check_chance = 1.0
             AND default_time_to_live = 0
             AND extensions = {}
@@ -1192,6 +1195,7 @@ CREATE TYPE test.address_type (
             AND comment = ''
             AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', 'max_threshold': '32', 'min_threshold': '4'}
             AND compression = {'chunk_length_in_kb': '16', 'class': 'org.apache.cassandra.io.compress.LZ4Compressor'}
+            AND memtable = {}
             AND crc_check_chance = 1.0
             AND default_time_to_live = 0
             AND extensions = {}
@@ -1298,6 +1302,7 @@ CREATE TYPE test.address_type (
                 AND comment = ''
                 AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', 'max_threshold': '32', 'min_threshold': '4'}
                 AND compression = {'chunk_length_in_kb': '16', 'class': 'org.apache.cassandra.io.compress.LZ4Compressor'}
+                AND memtable = {}
                 AND crc_check_chance = 1.0
                 AND default_time_to_live = 0
                 AND extensions = {}
@@ -1829,8 +1834,11 @@ Tracing session:""")
         """
         max_partitions_per_batch = 5
         self.cluster.populate(3)
-        self.cluster.set_configuration_options({
-            'unlogged_batch_across_partitions_warn_threshold': str(max_partitions_per_batch)})
+
+        config_opts = {'unlogged_batch_across_partitions_warn_threshold': str(max_partitions_per_batch)}
+        if self.supports_guardrails:
+            config_opts = {"guardrails": config_opts}
+        self.cluster.set_configuration_options(config_opts)
 
         self.cluster.start()
 
@@ -1879,6 +1887,52 @@ Tracing session:""")
 
         stdout, stderr = self.run_cqlsh(node1, cmds='USE system', cqlsh_options=['--debug', '--connect-timeout=10'])
         assert "Using connect timeout: 10 seconds" in stderr
+
+    @since('4.0')
+    def test_consistency_level_options(self):
+        """
+        Tests for new cmdline consistency options:
+        - consistency-level
+        - serial-consistency-level
+        @jira_ticket STAR-432
+        """
+        self.cluster.populate(1)
+        self.cluster.start()
+
+        node1, = self.cluster.nodelist()
+
+        def expect_output_no_errors(cmd, options, output):
+            stdout, stderr = self.run_cqlsh(node1, cmds=cmd, cqlsh_options=options)
+            assert output in stdout, stderr
+            assert stderr == ''
+
+        expect_output_no_errors('CONSISTENCY', [],
+                                'Current consistency level is ONE.')
+
+        expect_output_no_errors('CONSISTENCY', ['--consistency-level', 'quorum'],
+                                'Current consistency level is QUORUM.')
+
+        expect_output_no_errors('SERIAL CONSISTENCY', [],
+                                'Current serial consistency level is SERIAL.')
+
+        expect_output_no_errors('SERIAL CONSISTENCY', ['--serial-consistency-level', 'local_serial'],
+                                'Current serial consistency level is LOCAL_SERIAL.')
+
+        def expect_error(cmd, options, error_msg):
+            stdout, stderr = self.run_cqlsh(node1, cmds=cmd, cqlsh_options=options)
+            assert error_msg in stderr
+
+        expect_error('CONSISTENCY', ['--consistency-level', 'foop'],
+                     '"foop" is not a valid consistency level')
+
+        expect_error('CONSISTENCY', ['--consistency-level', 'serial'],
+                     '"serial" is not a valid consistency level')
+
+        expect_error('SERIAL CONSISTENCY', ['--serial-consistency-level', 'foop'],
+                     '"foop" is not a valid serial consistency level')
+
+        expect_error('SERIAL CONSISTENCY', ['--serial-consistency-level', 'ONE'],
+                     '"ONE" is not a valid serial consistency level')
 
     @since('3.0.19')
     def test_protocol_negotiation(self):
@@ -2452,6 +2506,50 @@ class TestCqlshSmoke(Tester, CqlshMixin):
    8 |     恵比毛勢須 | 酔ひもせず |     ゑひもせす
 """
         assert stdout_lines_sorted.find(expected) >= 0
+
+    @since('4.0')
+    def test_no_file_io(self):
+        def run_cqlsh_catch_toolerror(cmd, env):
+            """
+            run_cqlsh will throw ToolError if cqlsh exits with a non-zero exit code.
+            """
+            out = ""
+            err = ""
+            try:
+                out, err, _ = self.node1.run_cqlsh(cmd, env)
+            except ToolError as e:
+                return e.stdout, e.stderr
+            return out, err
+
+        create_ks(self.session, 'foo', rf=1)
+        create_cf(self.session, 'bar', key_type='int', columns={'name': 'text'})
+
+        cqlsh_stdout, cqlsh_stderr, _ = self.node1.run_cqlsh('COPY foo.bar TO \'/dev/null\';', [])
+        assert '0 rows exported to 1 files' in cqlsh_stdout
+        assert cqlsh_stderr == ''
+        cqlsh_stdout, cqlsh_stderr = run_cqlsh_catch_toolerror('COPY foo.bar TO \'/dev/null\';', ['--no-file-io'])
+        assert cqlsh_stdout == ''
+        assert 'No file I/O permitted' in cqlsh_stderr
+
+        cqlsh_stdout, cqlsh_stderr = run_cqlsh_catch_toolerror('DEBUG', [])
+        assert '(Pdb)' in cqlsh_stdout
+        cqlsh_stdout, cqlsh_stderr = run_cqlsh_catch_toolerror('DEBUG', ['--no-file-io'])
+        assert cqlsh_stdout == ''
+        assert 'No file I/O permitted' in cqlsh_stderr
+
+        cqlsh_stdout, cqlsh_stderr = run_cqlsh_catch_toolerror('CAPTURE \'nah\'', [])
+        assert cqlsh_stdout == 'Now capturing query output to \'nah\'.\n'
+        assert cqlsh_stderr == ''
+        cqlsh_stdout, cqlsh_stderr = run_cqlsh_catch_toolerror('CAPTURE \'nah\'', ['--no-file-io'])
+        assert cqlsh_stdout == ''
+        assert 'No file I/O permitted' in cqlsh_stderr
+
+        cqlsh_stdout, cqlsh_stderr = run_cqlsh_catch_toolerror('SOURCE \'nah\'', [])
+        assert cqlsh_stdout == ''
+        assert cqlsh_stderr == ''
+        cqlsh_stdout, cqlsh_stderr = run_cqlsh_catch_toolerror('SOURCE \'nah\'', ['--no-file-io'])
+        assert cqlsh_stdout == ''
+        assert 'No file I/O permitted' in cqlsh_stderr
 
 
 class TestCqlLogin(Tester, CqlshMixin):

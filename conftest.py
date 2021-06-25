@@ -43,6 +43,9 @@ def check_required_loopback_interfaces_available():
 
 
 def pytest_addoption(parser):
+    parser.addoption("--sstable-format", action="store", default="bti",
+                     help="SSTable format to be used by default for all newly created SSTables: "
+                          "big or bti (default: bti)")
     parser.addoption("--use-vnodes", action="store_true", default=False,
                      help="Determines wither or not to setup clusters using vnodes for tests")
     parser.addoption("--use-off-heap-memtables", action="store_true", default=False,

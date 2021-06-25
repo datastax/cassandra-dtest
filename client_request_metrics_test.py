@@ -42,7 +42,7 @@ class TestClientRequestMetrics(Tester):
         fixture_dtest_setup.ignore_log_patterns = (
             'Testing write failures',  # The error to simulate a write failure
             'ERROR WRITE_FAILURE',  # Logged in DEBUG mode for write failures
-            f"Scanned over {TOMBSTONE_FAILURE_THRESHOLD + 1} tombstones during query"  # Caused by the read failure tests
+            f"Scanned over {TOMBSTONE_FAILURE_THRESHOLD + 1} (tombstones|tombstone rows) during query"  # Caused by the read failure tests
         )
 
     def setup_once(self):
@@ -50,6 +50,7 @@ class TestClientRequestMetrics(Tester):
         cluster.set_configuration_options({'read_request_timeout_in_ms': 3000,
                                            'write_request_timeout_in_ms': 3000,
                                            'phi_convict_threshold': 12,
+                                           'tombstone_warn_threshold': -1,
                                            'tombstone_failure_threshold': TOMBSTONE_FAILURE_THRESHOLD,
                                            'enable_materialized_views': 'true'})
         cluster.populate(2, debug=True)
