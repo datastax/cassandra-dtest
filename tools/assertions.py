@@ -293,12 +293,16 @@ def assert_stderr_clean(err, acceptable_errors=None):
     @param acceptable_errors A list that if used, the user chooses what
                              messages are to be acceptable in stderr.
     """
+    default_acceptable_errors = ["WARN.*JNA link failure.*unavailable.",
+                                 "objc.*Class JavaLaunchHelper.*?Which one is undefined.",
+                                 # Stress tool JMX connection failure, see CASSANDRA-12437
+                                 "Failed to connect over JMX; not collecting these stats",
+                                 "Picked up JAVA_TOOL_OPTIONS:.*"]
+
     if acceptable_errors is None:
-        acceptable_errors = ["WARN.*JNA link failure.*unavailable.",
-                             "objc.*Class JavaLaunchHelper.*?Which one is undefined.",
-                             # Stress tool JMX connection failure, see CASSANDRA-12437
-                             "Failed to connect over JMX; not collecting these stats",
-                             "Picked up JAVA_TOOL_OPTIONS:.*"]
+        acceptable_errors = default_acceptable_errors
+    else:
+        acceptable_errors = default_acceptable_errors + acceptable_errors
 
     regex_str = r"^({}|\s*|\n)*$".format("|".join(acceptable_errors))
     err_str = err.strip()

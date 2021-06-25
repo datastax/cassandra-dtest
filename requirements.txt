@@ -6,7 +6,7 @@
 # git tag -a -f cassandra-test
 # git push origin :refs/tags/cassandra-test
 # git push -f origin refs/tags/cassandra-test
--e git+https://github.com/riptano/ccm.git@cassandra-test#egg=ccm
+git+https://github.com/riptano/ccm.git@cassandra-test#egg=ccm
 decorator
 docopt
 enum34
@@ -18,6 +18,7 @@ pytest-repeat
 parse
 pycodestyle
 psutil
+six>=1.12.0
 thrift==0.10.0
 netifaces
 beautifulsoup4
