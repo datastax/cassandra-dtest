@@ -9,7 +9,7 @@ import logging
 import signal
 import uuid
 
-from cassandra import ConsistencyLevel
+from cassandra import ConsistencyLevel, OperationTimedOut
 from cassandra.concurrent import execute_concurrent_with_args
 from ccmlib.node import NodeError, TimeoutError, ToolError, Node
 
@@ -877,15 +877,23 @@ class TestBootstrap(Tester):
 
         node3.watch_log_for(bootstrap_error)
 
-        session = self.patient_exclusive_cql_connection(node2)
+        session = self.patient_exclusive_cql_connection(node2, request_timeout=30)
 
         # Repeat the select count(*) query, to help catch
         # bugs like 9484, where count(*) fails at higher
         # data loads.
-        logger.error(node1.nodetool('status').stdout)
-        for _ in range(5):
-            logger.error("Executing SELECT to node2")
-            assert_one(session, "SELECT count(*) from keyspace1.standard1", [500000], cl=ConsistencyLevel.ONE)
+        succ = 0
+        tries = 10
+        while succ < 5 and tries > 0:
+            try:
+                start_time = time.time()
+                assert_one(session, "SELECT count(*) from keyspace1.standard1", [500000], cl=ConsistencyLevel.ONE)
+                succ += 1
+                logger.debug("SELECT COUNT(*) finished in {} seconds".format(time.time() - start_time))
+            except OperationTimedOut:
+                logger.warning("SELECT timed out and will be retried")
+                tries -= 1
+        assert tries > 0, "Too many timeouts when running SELECT COUNT(*)"
 
     def test_cleanup(self):
         """
