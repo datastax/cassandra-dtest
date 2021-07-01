@@ -845,29 +845,74 @@ class TestAuth(Tester):
 
         assert_unauthorized(cathy, "SELECT * FROM ks.cf", "User cathy has no SELECT permission on <table ks.cf> or any of its parents")
 
-    def test_permissions_caching(self):
+    def test_permissions_caching_authenticated_user(self):
         """
-        * Launch a one node cluster, with a 2s permission cache
+        This test is to show that the permissions caching in AuthenticatedUser
+        works correctly and revokes the permissions from a logged in user.
+        * Launch a one node cluster, with a permissions cache of 2s
         * Connect as the default superuser
-        * Create a new user, 'cathy'
-        * Create a table, ks.cf
-        * Connect as cathy in two separate sessions
-        * Grant SELECT to cathy
-        * Verify that reading from ks.cf throws Unauthorized until the cache expires
-        * Verify that after the cache expires, we can eventually read with both sessions
-
-        @jira_ticket CASSANDRA-8194
+        * Create USER 'cathy'
+        * Grant SELECT permissions to 'cathy'
+        * Verify cathy can perform expected operations
+        * Revoke SELECT permissions from 'cathy'.
+        * Try reading as 'cathy', and verify that eventually the cache expires and it fails.
         """
         self.prepare(permissions_validity=2000)
 
         cassandra = self.get_session(user='cassandra', password='cassandra')
+        cassandra.execute("CREATE KEYSPACE ks WITH replication = {'class':'SimpleStrategy', 'replication_factor':1}")
+        cassandra.execute("CREATE TABLE ks.cf (id int primary key, val int)")
+        cassandra.execute("INSERT INTO ks.cf (id, val) VALUES (0, 0)")
+
+        cassandra.execute("CREATE USER cathy WITH PASSWORD '12345'")
+        cassandra.execute("GRANT SELECT ON ks.cf TO cathy")
+
+        cathy = self.get_session(user='cathy', password='12345')
+
+        # cathy should have select permission
+        assert_one(cathy, "SELECT * FROM ks.cf", [0, 0])
+
+        cassandra.execute("REVOKE SELECT ON ks.cf FROM cathy")
+
+        # cathy should retain permissions until the cache expires
+        # cache entries are invalidated on REVOKE in 4.0
+        max_attempts = 1 if self.cluster.version() >= LooseVersion('4.0') else 20
+        unauthorized = None
+        cnt = 0
+        while not unauthorized and cnt < max_attempts:
+            try:
+                cathy.execute("SELECT * FROM ks.cf")
+                cnt += 1
+                time.sleep(.5)
+            except Unauthorized as e:
+                unauthorized = e
+
+        assert unauthorized is not None
+
+    def test_permissions_caching_update_interval(self):
+        """
+        * Launch a two node cluster, with a 2s permission cache
+        * node0: Connect as the default superuser
+        *        Create a new user, 'cathy'
+        *        Create a table, ks.cf
+        * node1: Connect as cathy in two separate sessions
+        * node0: Grant SELECT to cathy
+        * node1: Verify that reading from ks.cf throws Unauthorized until the cache expires
+        *        Verify that after the cache expires, we can eventually read with both sessions
+
+        @jira_ticket CASSANDRA-8194
+        """
+        self.prepare(nodes=2, permissions_validity=2000)
+        node0, node1 = self.cluster.nodelist()
+
+        cassandra = self.patient_exclusive_cql_connection(node0, user='cassandra', password='cassandra')
         cassandra.execute("CREATE USER cathy WITH PASSWORD '12345'")
         cassandra.execute("CREATE KEYSPACE ks WITH replication = {'class':'SimpleStrategy', 'replication_factor':1}")
         cassandra.execute("CREATE TABLE ks.cf (id int primary key, val int)")
 
-        cathy = self.get_session(user='cathy', password='12345')
+        cathy = self.patient_exclusive_cql_connection(node1, user='cathy', password='12345')
         # another user to make sure the cache is at user level
-        cathy2 = self.get_session(user='cathy', password='12345')
+        cathy2 = self.patient_exclusive_cql_connection(node1, user='cathy', password='12345')
         cathys = [cathy, cathy2]
 
         assert_unauthorized(cathy, "SELECT * FROM ks.cf", "User cathy has no SELECT permission on <table ks.cf> or any of its parents")
@@ -1924,9 +1969,11 @@ class TestAuthRoles(Tester):
 
         self.superuser.execute("REVOKE role1 FROM mike")
         # mike should retain permissions until the cache expires
+        # cache entries are invalidated on REVOKE in 4.0
+        max_attempts = 1 if self.cluster.version() >= LooseVersion('4.0') else 20
         unauthorized = None
         cnt = 0
-        while not unauthorized and cnt < 20:
+        while not unauthorized and cnt < max_attempts:
             try:
                 as_mike.execute("SELECT * FROM ks.t1")
                 cnt += 1
