@@ -832,6 +832,7 @@ class TestBootstrap(Tester):
 
 
     @since('2.1.1')
+    @pytest.mark.resource_intensive
     def test_simultaneous_bootstrap(self):
         """
         Attempt to bootstrap two nodes at once, to assert the second bootstrapped node fails, and does not interfere.
