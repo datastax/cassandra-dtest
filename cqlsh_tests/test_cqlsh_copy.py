@@ -2514,6 +2514,7 @@ class TestCqlshCopy(Tester):
                                    copy_to_options={'NUMPROCESSES': 5, 'MAXATTEMPTS': 20},
                                    copy_from_options={'NUMPROCESSES': 2})
 
+    @pytest.mark.skip(reason="test is not reliable and sensitive to vm power")
     def test_bulk_round_trip_with_timeouts(self):
         """
         Test bulk import with very short read and write timeout values, this should exercise the
