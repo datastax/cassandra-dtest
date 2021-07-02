@@ -883,6 +883,7 @@ class TestBootstrap(Tester):
         # bugs like 9484, where count(*) fails at higher
         # data loads.
         for _ in range(5):
+            # Improve reliability for slower/loaded test systems by using larger client timeout
             assert_one(session, "SELECT count(*) from keyspace1.standard1", [500000], cl=ConsistencyLevel.ONE, timeout=30)
 
     def test_cleanup(self):
