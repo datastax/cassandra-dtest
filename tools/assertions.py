@@ -114,7 +114,7 @@ def assert_unauthorized(session, query, message):
     assert_exception(session, query, matching=message, expected=Unauthorized)
 
 
-def assert_one(session, query, expected, cl=None):
+def assert_one(session, query, expected, cl=None, timeout=None):
     """
     Assert query returns one row.
     @param session Session to use
@@ -127,7 +127,7 @@ def assert_one(session, query, expected, cl=None):
     assert_one(session, query, [0, 0])
     """
     simple_query = SimpleStatement(query, consistency_level=cl)
-    res = session.execute(simple_query)
+    res = session.execute(simple_query) if timeout is None else session.execute(simple_query, timeout=timeout)
     list_res = _rows_to_list(res)
     assert list_res == [expected], "Expected {} from {}, but got {}".format([expected], query, list_res)
 
