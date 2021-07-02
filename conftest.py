@@ -544,53 +544,58 @@ def cassandra_dir_and_version(config):
     cassandra_version = config.getoption("--cassandra-version")
     return cassandra_dir, cassandra_version
 
-
-def has_mark(item, mark):
+def has_mark(item, mark, any_class):
     if item.get_closest_marker(mark) is not None:
         return True
     else:
-        for item_module in inspect.getmembers(item.module, inspect.isclass):
-            if hasattr(item_module[1], "pytestmark"):
-                mark_names = [m.name for m in item_module[1].pytestmark]
-                if mark in mark_names:
-                    return True
+        if not any_class:
+            return False
+        else:
+            for item_module in inspect.getmembers(item.module, inspect.isclass):
+                if hasattr(item_module[1], "pytestmark"):
+                    mark_names = [m.name for m in item_module[1].pytestmark]
+                    if mark in mark_names:
+                        return True
 
         return False
 
 
-def _is_skippable(item, mark, include_marked, include_other):
-    if has_mark(item, mark):
+def _is_skippable(item, mark, include_marked, include_non_marked, any_class = False):
+    if has_mark(item, mark, any_class):
         if include_marked:
             return False
         else:
             logger.info("SKIP: Skipping %s because it is marked with %s" % (item, mark))
             return True
     else:
-        if include_other:
+        if include_non_marked:
             return False
         else:
             logger.info("SKIP: Skipping %s because it is not marked with %s" % (item, mark))
             return True
 
+def _can_run_resource_intensive_tests(dtest_config, sufficient_resources):
+    return (dtest_config.force_execution_of_resource_intensive_tests
+            or dtest_config.only_resource_intensive_tests
+            or sufficient_resources)
 
-def is_skippable(item,
-                 include_upgrade_tests,
-                 include_non_upgrade_tests,
-                 include_resource_intensive_tests,
-                 include_non_resource_intensive_tests,
-                 include_vnodes_tests,
-                 include_no_vnodes_tests,
-                 include_no_offheap_memtables_tests):
+def is_skippable(item, dtest_config, sufficient_resources):
+    can_run_resource_intensive_tests = _can_run_resource_intensive_tests(dtest_config, sufficient_resources)
 
-    skippable = False
+    include_upgrade_tests = dtest_config.execute_upgrade_tests or dtest_config.execute_upgrade_tests_only
+    include_non_upgrade_tests = not dtest_config.execute_upgrade_tests_only
+    include_resource_intensive_tests = can_run_resource_intensive_tests and not dtest_config.skip_resource_intensive_tests
+    include_non_resource_intensive_tests = not dtest_config.only_resource_intensive_tests
+    include_vnodes_tests = dtest_config.use_vnodes
+    include_no_vnodes_tests = not dtest_config.use_vnodes
+    include_no_offheap_memtables_tests = not dtest_config.use_off_heap_memtables
 
-    skippable = skippable or _is_skippable(item, "upgrade_test", include_upgrade_tests, include_non_upgrade_tests)
-    skippable = skippable or _is_skippable(item, "resource_intensive", include_resource_intensive_tests, include_non_resource_intensive_tests)
-    skippable = skippable or _is_skippable(item, "vnodes", include_vnodes_tests, True)
-    skippable = skippable or _is_skippable(item, "no_vnodes", include_no_vnodes_tests, True)
-    skippable = skippable or _is_skippable(item, "no_offheap_memtables", include_no_offheap_memtables_tests, True)
-    skippable = skippable or _is_skippable(item, "depends_driver", False, True)
-
+    skippable = (_is_skippable(item, "upgrade_test", include_upgrade_tests, include_non_upgrade_tests, True)
+                 or _is_skippable(item, "resource_intensive", include_resource_intensive_tests, include_non_resource_intensive_tests)
+                 or _is_skippable(item, "vnodes", include_vnodes_tests, True)
+                 or _is_skippable(item, "no_vnodes", include_no_vnodes_tests, True)
+                 or _is_skippable(item, "no_offheap_memtables", include_no_offheap_memtables_tests, True)
+                 or _is_skippable(item, "depends_driver", False, True))
     return skippable
 
 
@@ -605,28 +610,13 @@ def pytest_collection_modifyitems(items, config):
     selected_items = []
     deselected_items = []
 
-    can_run_resource_intensive_tests = dtest_config.force_execution_of_resource_intensive_tests or sufficient_system_resources_for_resource_intensive_tests()
-    if not can_run_resource_intensive_tests:
+    sufficient_resources = sufficient_system_resources_for_resource_intensive_tests()
+    if not _can_run_resource_intensive_tests(dtest_config, sufficient_resources):
         logger.info("Resource intensive tests will be skipped because there is not enough system resource "
                     "and --force-resource-intensive-tests was not specified")
 
-    include_upgrade_tests = dtest_config.execute_upgrade_tests or dtest_config.execute_upgrade_tests_only
-    include_non_upgrade_tests = not dtest_config.execute_upgrade_tests_only
-    include_resource_intensive_tests = can_run_resource_intensive_tests and not dtest_config.skip_resource_intensive_tests
-    include_non_resource_intensive_tests = not dtest_config.only_resource_intensive_tests
-    include_vnodes_tests = dtest_config.use_vnodes
-    include_no_vnodes_tests = not dtest_config.use_vnodes
-    include_no_offheap_memtables_tests = not dtest_config.use_off_heap_memtables
-
     for item in items:
-        deselect_test = is_skippable(item,
-                                     include_upgrade_tests,
-                                     include_non_upgrade_tests,
-                                     include_resource_intensive_tests,
-                                     include_non_resource_intensive_tests,
-                                     include_vnodes_tests,
-                                     include_no_vnodes_tests,
-                                     include_no_offheap_memtables_tests)
+        deselect_test = is_skippable(item, dtest_config, sufficient_resources)
 
         if deselect_test:
             deselected_items.append(item)
