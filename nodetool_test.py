@@ -478,3 +478,31 @@ class TestNodetool(Tester):
             if re.match('.*Instances.*Bytes.*Type.*', line):
                 hasPattern = True
         assert hasPattern == True, "Expected 'SJK hh' output"
+
+    @since('4.0')
+    def test_upgradesstables_setconcurrentcompactors(self):
+        """
+        Verify that the number of concurrent compactors set by 'nodetool setconcurrentcompactors'
+        is used in subsequent nodetool upgradesstables
+        """
+
+        cluster = self.cluster
+        cluster.populate([1]).start()
+        node = cluster.nodelist()[0]
+
+        out, err, _ = node.nodetool('getconcurrentcompactors')
+        curr_compactors = int(out.strip().splitlines()[-1][-1:])
+        new_compactors = 6
+        logger.debug(out)
+
+        out, err, _ = node.nodetool('setconcurrentcompactors {}'.format(new_compactors))
+        logger.debug(out)
+
+        out, err, _ = node.nodetool(format('upgradesstables -j {}'.format(new_compactors)))
+        logger.debug(out)
+
+        hasPattern = False
+        for line in out.split(os.linesep):
+            if re.match('jobs \(\d\) is bigger than configured concurrent_compactors \(\d\) on this host, using at most \d threads', line):
+                hasPattern = True
+        assert hasPattern == False, "Unexpected 'upgradesstables' output"
