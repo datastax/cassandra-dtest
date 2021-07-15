@@ -16,7 +16,7 @@ since = pytest.mark.since
 ported_to_in_jvm = pytest.mark.ported_to_in_jvm
 logger = logging.getLogger(__name__)
 
-strategies = ['LeveledCompactionStrategy', 'SizeTieredCompactionStrategy', 'DateTieredCompactionStrategy']
+strategies = ['LeveledCompactionStrategy', 'SizeTieredCompactionStrategy', 'DateTieredCompactionStrategy', 'UnifiedCompactionStrategy']
 
 
 class TestCompaction(Tester):
@@ -311,9 +311,9 @@ class TestCompaction(Tester):
         self.skip_if_not_supported(strategy)
 
         if self.cluster.version() >= '5.0':
-            strategies = ['LeveledCompactionStrategy', 'SizeTieredCompactionStrategy']
+            strategies = ['LeveledCompactionStrategy', 'SizeTieredCompactionStrategy', 'UnifiedCompactionStrategy']
         else:
-            strategies = ['LeveledCompactionStrategy', 'SizeTieredCompactionStrategy', 'DateTieredCompactionStrategy']
+            strategies = ['LeveledCompactionStrategy', 'SizeTieredCompactionStrategy', 'DateTieredCompactionStrategy', 'UnifiedCompactionStrategy']
 
         if strategy in strategies:
             strategies.remove(strategy)
@@ -322,6 +322,7 @@ class TestCompaction(Tester):
             [node1] = cluster.nodelist()
 
             for strat in strategies:
+                logger.debug("Switching to {}".format(strat))
                 session = self.patient_cql_connection(node1)
                 create_ks(session, 'ks', 1)
 
