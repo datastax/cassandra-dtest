@@ -1,0 +1,38 @@
+--- a/compaction_test.py
++++ b/compaction_test.py
+@@ -307,17 +307,13 @@
+         Ensure that switching strategies does not result in problems.
+         Insert data, switch strategies, then check against data loss.
+         """
+-<<<<<<<
+ 
+         self.skip_if_not_supported(strategy)
+ 
+         if self.cluster.version() >= '5.0':
+-            strategies = ['LeveledCompactionStrategy', 'SizeTieredCompactionStrategy']
++            strategies = ['LeveledCompactionStrategy', 'SizeTieredCompactionStrategy', 'UnifiedCompactionStrategy']
+         else:
+-            strategies = ['LeveledCompactionStrategy', 'SizeTieredCompactionStrategy', 'DateTieredCompactionStrategy']
+-=======
+-        strategies = ['LeveledCompactionStrategy', 'SizeTieredCompactionStrategy', 'DateTieredCompactionStrategy', 'UnifiedCompactionStrategy']
+->>>>>>>
++            strategies = ['LeveledCompactionStrategy', 'SizeTieredCompactionStrategy', 'DateTieredCompactionStrategy', 'UnifiedCompactionStrategy']
+ 
+         if strategy in strategies:
+             strategies.remove(strategy)
+diff --git a/compaction_test.py b/compaction_test.py
+index 0912f530..51330587 100644
+--- a/compaction_test.py
++++ b/compaction_test.py
+@@ -311,9 +311,9 @@ class TestCompaction(Tester):
+         self.skip_if_not_supported(strategy)
+ 
+         if self.cluster.version() >= '5.0':
+-            strategies = ['LeveledCompactionStrategy', 'SizeTieredCompactionStrategy']
++            strategies = ['LeveledCompactionStrategy', 'SizeTieredCompactionStrategy', 'UnifiedCompactionStrategy']
+         else:
+-            strategies = ['LeveledCompactionStrategy', 'SizeTieredCompactionStrategy', 'DateTieredCompactionStrategy']
++            strategies = ['LeveledCompactionStrategy', 'SizeTieredCompactionStrategy', 'DateTieredCompactionStrategy', 'UnifiedCompactionStrategy']
+ 
+         if strategy in strategies:
+             strategies.remove(strategy)
