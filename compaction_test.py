@@ -15,7 +15,7 @@ from tools.assertions import assert_length_equal, assert_none, assert_one
 since = pytest.mark.since
 logger = logging.getLogger(__name__)
 
-strategies = ['LeveledCompactionStrategy', 'SizeTieredCompactionStrategy', 'DateTieredCompactionStrategy']
+strategies = ['LeveledCompactionStrategy', 'SizeTieredCompactionStrategy', 'DateTieredCompactionStrategy', 'UnifiedCompactionStrategy']
 
 
 class TestCompaction(Tester):
@@ -298,7 +298,7 @@ class TestCompaction(Tester):
         Ensure that switching strategies does not result in problems.
         Insert data, switch strategies, then check against data loss.
         """
-        strategies = ['LeveledCompactionStrategy', 'SizeTieredCompactionStrategy', 'DateTieredCompactionStrategy']
+        strategies = ['LeveledCompactionStrategy', 'SizeTieredCompactionStrategy', 'DateTieredCompactionStrategy', 'UnifiedCompactionStrategy']
 
         if strategy in strategies:
             strategies.remove(strategy)
@@ -307,6 +307,7 @@ class TestCompaction(Tester):
             [node1] = cluster.nodelist()
 
             for strat in strategies:
+                logger.debug("Switching to {}".format(strat))
                 session = self.patient_cql_connection(node1)
                 create_ks(session, 'ks', 1)
 
