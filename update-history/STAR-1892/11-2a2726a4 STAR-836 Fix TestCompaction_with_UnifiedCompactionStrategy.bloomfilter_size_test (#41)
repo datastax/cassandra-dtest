@@ -1,0 +1,36 @@
+--- a/compaction_test.py
++++ b/compaction_test.py
+@@ -134,18 +134,14 @@
+                           "threads=300", "-schema", "replication(factor=1)",
+                           "compaction({},enabled=false)".format(strategy_string)])
+             node1.flush()
+-        logger.debug(node1.nodetool('cfstats keyspace1.standard1').stdout)
++        logger.debug(node1.nodetool('tablestats keyspace1.standard1').stdout)
+ 
+         node1.nodetool('enableautocompaction')
+         node1.wait_for_compactions()
+ 
+         table_name = 'standard1'
+-<<<<<<<
+-        output = node1.nodetool('cfstats keyspace1.standard1').stdout
++        output = node1.nodetool('tablestats keyspace1.standard1').stdout
+         logger.debug(output)
+-=======
+-        output = node1.nodetool('tablestats').stdout
+->>>>>>>
+         output = output[output.find(table_name):]
+         output = output[output.find("Bloom filter space used"):]
+         bfSize = int(output[output.find(":") + 1:output.find("\n")].strip())
+diff --git a/compaction_test.py b/compaction_test.py
+index fa924974..d79f1326 100644
+--- a/compaction_test.py
++++ b/compaction_test.py
+@@ -134,7 +134,7 @@ class TestCompaction(Tester):
+                           "threads=300", "-schema", "replication(factor=1)",
+                           "compaction({},enabled=false)".format(strategy_string)])
+             node1.flush()
+-        logger.debug(node1.nodetool('cfstats keyspace1.standard1').stdout)
++        logger.debug(node1.nodetool('tablestats keyspace1.standard1').stdout)
+ 
+         node1.nodetool('enableautocompaction')
+         node1.wait_for_compactions()
