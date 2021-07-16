@@ -1,6 +1,7 @@
 import os
 import os.path
 import threading
+import tempfile
 import time
 import re
 import pytest
