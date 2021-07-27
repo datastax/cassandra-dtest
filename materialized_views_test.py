@@ -116,7 +116,7 @@ class TestMaterializedViews(Tester):
         else:
             return 'system.views_builds_in_progress'
 
-    def _wait_for_view(self, ks, view):
+    def _wait_for_view(self, ks, view, attempts=50, delay=0):
         logger.debug("waiting for view")
 
         def _view_build_finished(node):
@@ -126,14 +126,17 @@ class TestMaterializedViews(Tester):
             result = list(s.execute(query))
             return len(result) == 0
 
+        if delay > 0:
+            time.sleep(delay)
+
+        remaining_attempts = attempts
         for node in self.cluster.nodelist():
             if node.is_running():
-                attempts = 50  # 1 sec per attempt, so 50 seconds total
-                while attempts > 0 and not _view_build_finished(node):
+                while remaining_attempts > 0 and not _view_build_finished(node):
                     time.sleep(1)
-                    attempts -= 1
-                if attempts <= 0:
-                    raise RuntimeError("View {}.{} build not finished after 50 seconds.".format(ks, view))
+                    remaining_attempts -= 1
+                if remaining_attempts <= 0:
+                    raise RuntimeError("View {}.{} build not finished after {}s delay and {} attempts with 1s delay between each".format(ks, view, delay, attempts))
 
     def _wait_for_view_build_start(self, session, ks, view, wait_minutes=2):
         """Wait for the start of a MV build, ensuring that it has saved some progress"""
@@ -2558,6 +2561,76 @@ class TestMaterializedViews(Tester):
 
             assert base_entry, "Both base {} and view entry {} should exist.".format(base_entry, view_entry)
             assert view_entry, "Both base {} and view entry {} should exist.".format(base_entry, view_entry)
+
+    def test_create_view_on_node_down(self):
+        """
+        Test view schema propagation when node is down and started
+        @jira_ticket: STAR-690
+        """
+        self.prepare(rf=1, nodes=2, options={'hinted_handoff_enabled': False})
+        node1, node2 = self.cluster.nodelist()
+        rows = 100
+
+        session1 = self.patient_exclusive_cql_connection(node1, keyspace="ks")
+
+        logger.debug("populate data on base table")
+        session1.execute("CREATE TABLE cf (pk int, ck int, a int, b int, primary key(pk,ck))")
+        for i in range(rows):
+            session1.execute("INSERT INTO cf(pk,ck,a,b) VALUES({},{},{},{})".format(i, i, i, i))
+
+        logger.debug("stop node2")
+        node2.stop(wait_other_notice=True)
+
+        logger.debug("create mv on node1")
+        session1.execute(("CREATE MATERIALIZED VIEW mv AS SELECT * FROM cf "
+                          "WHERE pk IS NOT NULL AND ck IS NOT NULL PRIMARY KEY (ck, pk)"))
+        session1.cluster.control_connection.wait_for_schema_agreement()
+
+        logger.debug("start node2, wait for view built")
+        node2.start(wait_other_notice=True)
+        session2 = self.patient_exclusive_cql_connection(node2, keyspace="ks")
+        self._wait_for_view('ks', 'mv', delay=30)
+
+        logger.debug("Verify view data")
+        assert_one(session2, "SELECT count(*) FROM mv", [rows])
+        for i in range(rows):
+            assert_one(session2, "SELECT * FROM cf WHERE pk={} AND ck={}".format(i, i), [i, i, i, i])
+            assert_one(session2, "SELECT * FROM mv WHERE pk={} AND ck={}".format(i, i), [i, i, i, i])
+
+    def test_alter_view_on_node_down(self):
+        """
+        Test view schema propagation when node is down and started
+        @jira_ticket: STAR-690
+        """
+        self.prepare(rf=2, nodes=2, options={'hinted_handoff_enabled': False})
+        node1, node2 = self.cluster.nodelist()
+
+        session1 = self.patient_exclusive_cql_connection(node1, keyspace="ks")
+
+        logger.debug("populate schema")
+        session1.execute("CREATE TABLE cf (pk int, ck int, a int, b int, primary key(pk,ck))")
+        session1.execute(("CREATE MATERIALIZED VIEW mv AS SELECT * FROM cf "
+                          "WHERE pk IS NOT NULL AND ck IS NOT NULL PRIMARY KEY (ck, pk)"))
+
+        logger.debug("stop node2")
+        node2.stop(wait_other_notice=True)
+
+        logger.debug("add column c to base table")
+        session1.execute("ALTER TABLE cf ADD c int")
+        session1.cluster.control_connection.wait_for_schema_agreement()
+
+        logger.debug("start node2, wait for schema agreement")
+        node2.start(wait_other_notice=True)
+        session2 = self.patient_exclusive_cql_connection(node2, keyspace="ks")
+        session2.cluster.control_connection.wait_for_schema_agreement()
+
+        logger.debug("execute insert query on node2, including new column")
+        session2.execute("INSERT INTO cf(pk,ck,a,b,c) VALUES(1,1,1,1,1)")
+
+        logger.debug("stop node1 and verify data on node2")
+        node1.stop(wait_other_notice=True)
+        assert_one(session2, "SELECT * FROM cf", [1, 1, 1, 1, 1])
+        assert_one(session2, "SELECT * FROM mv", [1, 1, 1, 1, 1])
 
 
 # For read verification
