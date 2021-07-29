@@ -7,6 +7,7 @@ from distutils.version import LooseVersion
 import pytest
 import logging
 
+from cassandra import ConsistencyLevel
 from ccmlib import common as ccmcommon
 from ccmlib.node import ToolError
 
@@ -112,7 +113,7 @@ class TestBaseSStableLoader(Tester):
                     copy_dir = os.path.join(copy_root, ddir)
                     distutils.dir_util.copy_tree(keyspace_dir, copy_dir)
 
-    def load_sstables(self, cluster, node, ks):
+    def load_sstables(self, cluster, node, ks, extra_args=None):
         cdir = node.get_install_dir()
         sstableloader = os.path.join(cdir, 'bin', ccmcommon.platform_binary('sstableloader'))
         env = ccmcommon.make_cassandra_env(cdir, node.get_path())
@@ -122,16 +123,20 @@ class TestBaseSStableLoader(Tester):
             for cf_dir in os.listdir(sstablecopy_dir):
                 full_cf_dir = os.path.join(sstablecopy_dir, cf_dir)
                 if os.path.isdir(full_cf_dir):
-                    cmd_args = [sstableloader, '--nodes', host, full_cf_dir]
+                    cmd_args = [sstableloader, '--nodes', host]
+                    if extra_args:
+                        cmd_args.extend(extra_args)
+                    cmd_args.append(full_cf_dir)
                     p = subprocess.Popen(cmd_args, stderr=subprocess.PIPE, stdout=subprocess.PIPE, env=env)
                     stdout, stderr = p.communicate()
                     exit_status = p.returncode
                     logger.debug('stdout: {out}'.format(out=stdout.decode("utf-8")))
                     logger.debug('stderr: {err}'.format(err=stderr.decode("utf-8")))
+                    assert stderr is None or not ("AssertionError" in stderr.decode("utf-8"))
                     assert 0 == exit_status, \
                         "sstableloader exited with a non-zero status: {}".format(exit_status)
 
-    def load_sstable_with_configuration(self, pre_compression=None, post_compression=None, ks="ks", create_schema=create_schema):
+    def load_sstable_with_configuration(self, pre_compression=None, post_compression=None, ks="ks", create_schema=create_schema, ignore_node=False):
         """
         tests that the sstableloader works by using it to load data.
         Compression of the columnfamilies being loaded, and loaded into
@@ -203,7 +208,7 @@ class TestBaseSStableLoader(Tester):
         time.sleep(5)  # let gossip figure out what is going on
 
         logger.debug("re-creating the keyspace and column families.")
-        session = self.cql_connection(node1)
+        session = self.cql_connection(node1, consistency_level=(ConsistencyLevel.ALL if ignore_node else ConsistencyLevel.ONE))
 
         if self.test_compact and default_install_version >= MAJOR_VERSION_4:
             self.create_schema_40(session, ks, post_compression)
@@ -213,7 +218,12 @@ class TestBaseSStableLoader(Tester):
 
         logger.debug("Calling sstableloader")
         # call sstableloader to re-load each cf.
-        self.load_sstables(cluster, node1, ks)
+        self.load_sstables(cluster, node1, ks, extra_args=['-i', node2.address()] if ignore_node else None)
+
+        # if we ignore a node from sstableloader, we shouldn't see any related stream entries in its log
+        if ignore_node:
+            bulk_load_entries = node2.grep_log(r".*Bulk Load.*")
+            assert not bulk_load_entries
 
         def read_and_validate_data(session):
             for i in range(NUM_KEYS):
@@ -413,3 +423,11 @@ class TestSSTableGenerationAndLoading(TestBaseSStableLoader):
         assert_one(session, """SELECT * FROM system."IndexInfo" WHERE table_name='k'""", ['k', 'idx', None])
         assert_all(session, "SELECT * FROM k.t", [[0, 1, 8], [0, 2, 8]])
         assert_all(session, "SELECT * FROM k.t WHERE v = 8", [[0, 1, 8], [0, 2, 8]])
+
+    def test_sstableloader_ignore_nodes(self):
+        """
+        Tests that sstableloader ignore functionality doesn't throw errors or stream to ignored nodes
+        @jira_ticket STAR-689
+        """
+        self.load_sstable_with_configuration(ignore_node=True)
+
