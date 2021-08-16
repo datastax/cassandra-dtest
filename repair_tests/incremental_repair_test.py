@@ -145,38 +145,20 @@ class TestIncRepair(Tester):
             results = list(session.execute("SELECT * FROM system.repairs"))
             assert len(results) == 0, str(results)
 
-        # disable compaction so we can verify sstables are marked pending repair
-        for node in self.cluster.nodelist():
-            node.nodetool('disableautocompaction ks tbl')
-
+        # repair
         node1.repair(options=['ks'])
 
         # check that all participating nodes have the repair recorded in their system
         # table, that all nodes are listed as participants, and that all sstables are
         # (still) marked pending repair
         expected_participants = {n.address() for n in self.cluster.nodelist()}
-        expected_participants_wp = {n.address_and_port() for n in self.cluster.nodelist()}
-        recorded_pending_ids = set()
         for node in self.cluster.nodelist():
             session = self.patient_exclusive_cql_connection(node)
             results = list(session.execute("SELECT * FROM system.repairs"))
             assert len(results) == 1
             result = results[0]
             assert set(result.participants) == expected_participants
-            if hasattr(result, "participants_wp"):
-                assert set(result.participants_wp) == expected_participants_wp
-            assert result.state, ConsistentState.FINALIZED == "4=FINALIZED"
-            pending_id = result.parent_id
-            self.assertAllPendingRepairSSTables(node, 'ks', pending_id)
-            recorded_pending_ids.add(pending_id)
-
-        assert len(recorded_pending_ids) == 1
-
-        # sstables are compacted out of pending repair by a compaction
-        # task, we disabled compaction earlier in the test, so here we
-        # force the compaction and check that all sstables are promoted
-        for node in self.cluster.nodelist():
-            node.nodetool('compact ks tbl')
+            assert result.state == ConsistentState.FINALIZED, str(result.state)
             self.assertAllRepairedSSTables(node, 'ks')
 
     def test_sstable_marking(self):
