@@ -193,6 +193,25 @@ class TestHelper(Tester):
     def uuid_sstable_identifiers_enabled(self, session):
         return 'true' == session.execute("select value from system_views.settings where name = 'uuid_sstable_identifiers_enabled'")[0][0]
 
+    def get_latest_generation(self, sstables):
+        """
+        Get the latest generation ID of the provided sstables
+        """
+        latest_gen = None
+        for table_or_index, table_sstables in list(sstables.items()):
+            gen = max(parse.search('{}-{generation}-{}.{}', s).named['generation'] for s in table_sstables)
+            latest_gen = gen if latest_gen is None else max([gen, latest_gen])
+        return latest_gen
+
+    def get_earliest_generation(self, sstables):
+        """
+        Get the earliest generation ID of the provided sstables
+        """
+        earliest_gen = None
+        for table_or_index, table_sstables in list(sstables.items()):
+            gen = min(parse.search('{}-{generation}-{}.{}', s).named['generation'] for s in table_sstables)
+            earliest_gen = gen if earliest_gen is None else min([gen, earliest_gen])
+        return earliest_gen
 
 @since('2.2')
 class TestScrubIndexes(TestHelper):
@@ -258,13 +277,16 @@ class TestScrubIndexes(TestHelper):
         if should_assert_sstables:
             self.increase_sstable_generations(initial_sstables)
             assert initial_sstables == scrubbed_sstables
+        assert self.get_latest_generation(initial_sstables) < self.get_earliest_generation(scrubbed_sstables)
 
         users = self.query_users(session)
         assert initial_users == users
 
         # Scrub and check sstables and data again
+        initial_sstables = scrubbed_sstables
         scrubbed_sstables = self.scrub('users', 'gender_idx', 'state_idx', 'birth_year_idx')
 
+        assert self.get_latest_generation(initial_sstables) < self.get_earliest_generation(scrubbed_sstables)
         if should_assert_sstables:
             self.increase_sstable_generations(initial_sstables)
             assert initial_sstables == scrubbed_sstables
@@ -301,6 +323,7 @@ class TestScrubIndexes(TestHelper):
 
         scrubbed_sstables = self.standalonescrub('users', 'gender_idx', 'state_idx', 'birth_year_idx')
 
+        assert self.get_latest_generation(initial_sstables) < self.get_earliest_generation(scrubbed_sstables)
         if should_assert_sstables:
             self.increase_sstable_generations(initial_sstables)
             assert initial_sstables == scrubbed_sstables
@@ -337,6 +360,7 @@ class TestScrubIndexes(TestHelper):
         initial_sstables = self.flush('users', 'user_uuids_idx')
         scrubbed_sstables = self.scrub('users', 'user_uuids_idx')
 
+        assert self.get_latest_generation(initial_sstables) < self.get_earliest_generation(scrubbed_sstables)
         if should_assert_sstables:
             self.increase_sstable_generations(initial_sstables)
             assert initial_sstables == scrubbed_sstables
@@ -344,8 +368,10 @@ class TestScrubIndexes(TestHelper):
         users = list(session.execute(("SELECT * from users where uuids contains {some_uuid}").format(some_uuid=_id)))
         assert initial_users == users
 
+        initial_sstables = scrubbed_sstables
         scrubbed_sstables = self.scrub('users', 'user_uuids_idx')
 
+        assert self.get_latest_generation(initial_sstables) < self.get_earliest_generation(scrubbed_sstables)
         if should_assert_sstables:
             self.increase_sstable_generations(initial_sstables)
             assert initial_sstables == scrubbed_sstables
@@ -402,6 +428,7 @@ class TestScrub(TestHelper):
         initial_sstables = self.flush('users')
         scrubbed_sstables = self.scrub('users')
 
+        assert self.get_latest_generation(initial_sstables) < self.get_earliest_generation(scrubbed_sstables)
         if should_assert_sstables:
             self.increase_sstable_generations(initial_sstables)
             assert initial_sstables == scrubbed_sstables
@@ -410,8 +437,10 @@ class TestScrub(TestHelper):
         assert initial_users == users
 
         # Scrub and check sstables and data again
+        initial_sstables = scrubbed_sstables
         scrubbed_sstables = self.scrub('users')
 
+        assert self.get_latest_generation(initial_sstables) < self.get_earliest_generation(scrubbed_sstables)
         if should_assert_sstables:
            self.increase_sstable_generations(initial_sstables)
            assert initial_sstables == scrubbed_sstables
@@ -448,6 +477,7 @@ class TestScrub(TestHelper):
 
         scrubbed_sstables = self.standalonescrub('users')
 
+        assert self.get_latest_generation(initial_sstables) < self.get_earliest_generation(scrubbed_sstables)
         if should_assert_sstables:
             self.increase_sstable_generations(initial_sstables)
             assert initial_sstables == scrubbed_sstables
@@ -480,6 +510,7 @@ class TestScrub(TestHelper):
 
         scrubbed_sstables = self.standalonescrub(table='users', acceptable_errors=["WARN.*Could not recreate or deserialize existing bloom filter, continuing with a pass-through bloom filter but this will significantly impact reads performance"])
 
+        assert self.get_latest_generation(initial_sstables) < self.get_earliest_generation(scrubbed_sstables)
         if should_assert_sstables:
             self.increase_sstable_generations(initial_sstables)
             assert initial_sstables == scrubbed_sstables
