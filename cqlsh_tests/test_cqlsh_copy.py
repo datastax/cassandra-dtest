@@ -2481,8 +2481,12 @@ class TestCqlshCopy(Tester):
 
         @jira_ticket CASSANDRA-9302
         """
+        config_opts = {'batch_size_warn_threshold_in_kb': '10'}
+        if self.supports_guardrails:  # batch size thresholds moved to guardrails in 4.0
+            config_opts = {'guardrails': config_opts}
+
         self._test_bulk_round_trip(nodes=3, partitioner="murmur3", num_operations=10000,
-                                   configuration_options={'batch_size_warn_threshold_in_kb': '10'},
+                                   configuration_options=config_opts,
                                    profile=os.path.join(os.path.dirname(os.path.realpath(__file__)), 'blogposts.yaml'),
                                    stress_table='stresscql.blogposts')
 
@@ -2495,14 +2499,22 @@ class TestCqlshCopy(Tester):
 
         @jira_ticket CASSANDRA-10938
         """
+        batch_size_warn_threshold_in_kb = '10'
+        native_transport_max_concurrent_connections = '12'
+        if self.supports_guardrails:  # batch size thresholds moved to guardrails in 4.0
+            config_opts = {'guardrails': {'batch_size_warn_threshold_in_kb': batch_size_warn_threshold_in_kb},
+                           'native_transport_max_concurrent_connections': native_transport_max_concurrent_connections}
+        else:
+            config_opts = {'native_transport_max_concurrent_connections': native_transport_max_concurrent_connections,
+                           'batch_size_warn_threshold_in_kb': batch_size_warn_threshold_in_kb}
         self._test_bulk_round_trip(nodes=3, partitioner="murmur3", num_operations=10000,
-                                   configuration_options={'native_transport_max_concurrent_connections': '12',
-                                                          'batch_size_warn_threshold_in_kb': '10'},
+                                   configuration_options=config_opts,
                                    profile=os.path.join(os.path.dirname(os.path.realpath(__file__)), 'blogposts.yaml'),
                                    stress_table='stresscql.blogposts',
                                    copy_to_options={'NUMPROCESSES': 5, 'MAXATTEMPTS': 20},
                                    copy_from_options={'NUMPROCESSES': 2})
 
+    @pytest.mark.skip(reason="test is not reliable and sensitive to vm power")
     def test_bulk_round_trip_with_timeouts(self):
         """
         Test bulk import with very short read and write timeout values, this should exercise the
@@ -2827,8 +2839,13 @@ class TestCqlshCopy(Tester):
         @jira_ticket CASSANDRA-11474
         """
         num_records = 100
-        self.prepare(nodes=1, configuration_options={'batch_size_warn_threshold_in_kb': '1',   # warn with 1kb and fail
-                                                     'batch_size_fail_threshold_in_kb': '5'})  # with 5kb size batches
+        batch_size_warn_threshold_in_kb = '1'   # warn with 1kb and fail
+        batch_size_fail_threshold_in_kb = '5'   # with 5kb size batches
+        config_opts = {'batch_size_warn_threshold_in_kb': batch_size_warn_threshold_in_kb,
+                       'batch_size_fail_threshold_in_kb': batch_size_fail_threshold_in_kb}
+        if self.supports_guardrails:  # batch size thresholds moved to guardrails in 4.0
+            config_opts = {'guardrails': config_opts}
+        self.prepare(nodes=1, configuration_options=config_opts)
 
         logger.debug('Running stress')
         stress_table_name = 'standard1'
@@ -3336,3 +3353,79 @@ class TestCqlshCopy(Tester):
         _test_invalid_data_for_sets()
         _test_invalid_data_for_lists()
         _test_invalid_data_for_maps()
+
+    @since('4.0')
+    def test_geotypes_copy(self):
+        """
+        Tests whether cqlsh COPY properly handles geo types with empty and null values.
+
+        @since 4.0.0
+
+        Steps:
+        * insert several geoTypes with null and empty values among them into a table
+        * cqlsh copy contents to .csv file and save them in a list
+        * wipe the table comletely of all data
+        * cqlsh copy contents from .csv back into the table
+        * get the contents of the table into a list
+        * assert the pre wiped data is the same as the newly copied data
+        :return
+        """
+        self.prepare()
+
+        self.session.execute("create table geo (k int primary key, point 'PointType', line 'LineStringType', poly 'PolygonType');")
+        self.session.execute("insert into geo (k, point, line, poly) VALUES (0, 'point(1.2 3.4)', 'linestring(1.0 1.1, 2.0 2.1, 3.0 3.1)', 'POLYGON ((10.1 10.0, 110.0 10.0, 110.0 110.0, 10.0 110.0, 10.0 10.0), (20.0 20.0, 20.0 30.0, 30.0 30.0, 30.0 20.0, 20.0 20.0))');")
+        self.session.execute("insert into geo (k, point, line, poly) VALUES (2, 'point(1.2 3.4)', 'linestring EMPTY', 'POLYGON EMPTY');")
+        self.session.execute("insert into geo (k) VALUES (1);")
+
+        # make sure data is inserted
+        data_actual = rows_to_list(self.session.execute("select * from geo;"))
+        assert len(data_actual) == 3
+
+        # dump data to CSV and truncate
+        tempfile = self.get_temp_file()
+        self.run_cqlsh(cmds="COPY ks.geo TO '{name}'".format(name=tempfile.name))
+        self.run_cqlsh(cmds="truncate ks.geo;")
+
+        # import data back
+        self.run_cqlsh(cmds="COPY ks.geo FROM '{name}'".format(name=tempfile.name))
+        data_copy = rows_to_list(self.session.execute("select * from geo;"))
+
+        assert data_actual == data_copy
+
+    @since("4.0")
+    def test_date_range_copy(self):
+        """
+        DateRangeTests.test_copy_command
+
+        Tests whether cqlsh COPY properly handles date_range types, including null values.
+        @note we cannot insert empty value ('') as it is not presented as null in cqlsh but it is in COPY
+        """
+        self.prepare()
+
+        self.session.execute("create table incomes (org text, period 'DateRangeType', incomes int, ver 'DateRangeType', primary key (org, period));")
+        # insert some data
+        self.session.execute("insert into incomes(org, period, incomes) values ('A','2014', 20140);")
+        self.session.execute("insert into incomes(org, period, incomes) values ('A','2015', 201500);")
+        self.session.execute("insert into incomes(org, period, incomes) values ('A','[2016-01-01 TO 2016-06-30]', 1007);")
+        self.session.execute("insert into incomes(org, period, incomes) values ('B','[2017-02-12 12:30:07 TO 2017-02-17 13:39:43.789]', 777);")
+        self.session.execute("insert into incomes(org, period, incomes, ver) values ('X','2011', 0, null);")
+        self.session.execute("insert into incomes(org, period, incomes) values ('C','*', 996);")
+        self.session.execute("insert into incomes(org, period, incomes) values ('C','[* TO *]', 997);")
+        self.session.execute("insert into incomes(org, period, incomes) values ('C','[* TO 2015-01]', 998);")
+        self.session.execute("insert into incomes(org, period, incomes) values ('C','[2015-01 TO *]', 999);")
+
+        # make sure data is inserted
+        data_actual = rows_to_list(self.session.execute("select * from incomes;"))
+        assert len(data_actual) == 9
+
+        # dump data to CSV and truncate
+        tempfile = self.get_temp_file()
+        self.run_cqlsh(cmds="COPY ks.incomes TO '{name}'".format(name=tempfile.name))
+        self.run_cqlsh(cmds="truncate ks.incomes;")
+
+        # import data back
+        self.run_cqlsh(cmds="COPY ks.incomes FROM '{name}'".format(name=tempfile.name))
+        data_copy = rows_to_list(self.session.execute("select * from incomes;"))
+
+        assert data_actual == data_copy
+

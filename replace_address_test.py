@@ -549,7 +549,17 @@ class TestReplaceAddress(BaseReplaceAddressTest):
 
     @flaky
     @pytest.mark.vnodes
-    def test_multi_dc_replace_with_rf1(self):
+    def test_multi_dc_replace_with_rf1_stcs(self):
+        self._test_multi_dc_replace_with_rf1('SizeTieredCompactionStrategy')
+
+    @flaky
+    @pytest.mark.vnodes
+    @since("4.0")
+    def test_multi_dc_replace_with_rf1_ucs(self):
+        self._test_multi_dc_replace_with_rf1('UnifiedCompactionStrategy')
+
+
+    def _test_multi_dc_replace_with_rf1(self, compaction_strategy):
         """
         Test that multi-dc replace works when rf=1 on each dc
         """
@@ -559,7 +569,7 @@ class TestReplaceAddress(BaseReplaceAddressTest):
         # Create the keyspace and table
         keyspace: keyspace1
         keyspace_definition: |
-          CREATE KEYSPACE keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'dc1': 1, 'dc2': 1};
+          CREATE KEYSPACE keyspace1 WITH replication = {{'class': 'NetworkTopologyStrategy', 'dc1': 1, 'dc2': 1}};
         table: users
         table_definition:
           CREATE TABLE users (
@@ -568,7 +578,7 @@ class TestReplaceAddress(BaseReplaceAddressTest):
             last_name text,
             email text,
             PRIMARY KEY(username)
-          ) WITH compaction = {'class':'SizeTieredCompactionStrategy'};
+          ) WITH compaction = {{'class':'{compaction_strategy}'}};
         insert:
           partitions: fixed(1)
           batchtype: UNLOGGED
@@ -576,7 +586,8 @@ class TestReplaceAddress(BaseReplaceAddressTest):
           read:
             cql: select * from users where username = ?
             fields: samerow
-        """
+        """.format(compaction_strategy=compaction_strategy)
+
         with tempfile.NamedTemporaryFile(mode='w+') as stress_config:
             stress_config.write(yaml_config)
             stress_config.flush()

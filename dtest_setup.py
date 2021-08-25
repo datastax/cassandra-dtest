@@ -17,7 +17,7 @@ from cassandra.cluster import NoHostAvailable
 from cassandra.cluster import EXEC_PROFILE_DEFAULT
 from cassandra.policies import WhiteListRoundRobinPolicy
 from ccmlib.common import is_win
-from ccmlib.cluster import Cluster
+from ccmlib.cluster import Cluster, NodeError
 
 from dtest import (get_ip_from_node, make_execution_profile, get_auth_provider, get_port_from_node,
                    get_eager_protocol_version)
@@ -332,6 +332,10 @@ class DTestSetup(object):
     def supports_v5_protocol(self, cluster_version):
         return cluster_version >= LooseVersion('4.0')
 
+    def supports_guardrails(self):
+        return self.cluster.version() >= LooseVersion('4.0')
+
+
     def cleanup_last_test_dir(self):
         if os.path.exists(self.last_test_dir):
             os.remove(self.last_test_dir)
@@ -346,17 +350,35 @@ class DTestSetup(object):
         """
         self.log_watch_thread.join(timeout=60)
 
+    def stop_cluster(self, gently=False):
+        """
+        Stops the cluster; if 'gently' is requested and a NodeError occurs, then
+        try again without 'gently'.
+
+        Some tests, by design, leave the cluster in a state which prevents it from
+        being stopped using 'gently'. Retrying without 'gently' will avoid marking
+        the test as a failure, but may prevent jacoco results from being recorded.
+        """
+        try:
+            self.cluster.stop(gently)
+        except NodeError as e:
+            if gently:
+                logger.debug("Exception stopping cluster with gently=True, retrying with gently=False: {0}".format(e))
+                self.cluster.stop(gently=False)
+            else:
+                raise e
+
     def cleanup_cluster(self, request=None):
         with log_filter('cassandra'):  # quiet noise from driver when nodes start going down
             test_failed = request and hasattr(request.node, 'rep_call') and request.node.rep_call.failed
             if self.dtest_config.keep_test_dir or (self.dtest_config.keep_failed_test_dir and test_failed):
-                self.cluster.stop(gently=self.dtest_config.enable_jacoco_code_coverage)
+                self.stop_cluster(gently=self.dtest_config.enable_jacoco_code_coverage)
             else:
                 # when recording coverage the jvm has to exit normally
                 # or the coverage information is not written by the jacoco agent
                 # otherwise we can just kill the process
                 if self.dtest_config.enable_jacoco_code_coverage:
-                    self.cluster.stop(gently=True)
+                    self.stop_cluster(gently=True)
 
                 # Cleanup everything:
                 try:
