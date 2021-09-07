@@ -547,13 +547,9 @@ class TestReplaceAddress(BaseReplaceAddressTest):
         self.replacement_node.watch_log_for("Unable to find sufficient sources for streaming range")
         assert_not_running(self.replacement_node)
 
-    @flaky
-    @pytest.mark.vnodes
     def test_multi_dc_replace_with_rf1_stcs(self):
         self._test_multi_dc_replace_with_rf1('SizeTieredCompactionStrategy')
 
-    @flaky
-    @pytest.mark.vnodes
     @since("4.0")
     def test_multi_dc_replace_with_rf1_ucs(self):
         self._test_multi_dc_replace_with_rf1('UnifiedCompactionStrategy')
