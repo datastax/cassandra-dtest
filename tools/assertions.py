@@ -114,7 +114,7 @@ def assert_unauthorized(session, query, message):
     assert_exception(session, query, matching=message, expected=Unauthorized)
 
 
-def assert_one(session, query, expected, cl=None):
+def assert_one(session, query, expected, cl=None, timeout=None):
     """
     Assert query returns one row.
     @param session Session to use
@@ -127,7 +127,7 @@ def assert_one(session, query, expected, cl=None):
     assert_one(session, query, [0, 0])
     """
     simple_query = SimpleStatement(query, consistency_level=cl)
-    res = session.execute(simple_query)
+    res = session.execute(simple_query) if timeout is None else session.execute(simple_query, timeout=timeout)
     list_res = _rows_to_list(res)
     assert list_res == [expected], "Expected {} from {}, but got {}".format([expected], query, list_res)
 
@@ -293,15 +293,19 @@ def assert_stderr_clean(err, acceptable_errors=None):
     @param acceptable_errors A list that if used, the user chooses what
                              messages are to be acceptable in stderr.
     """
+    default_acceptable_errors = ["WARN.*JNA link failure.*unavailable.",
+                                 "objc.*Class JavaLaunchHelper.*?Which one is undefined.",
+                                 # Stress tool JMX connection failure, see CASSANDRA-12437
+                                 "Failed to connect over JMX; not collecting these stats",
+                                 "Picked up JAVA_TOOL_OPTIONS:.*",
+                                 # Warnings for backward compatibility should be logged CASSANDRA-15234
+                                 ".*parameters have been deprecated. They have new names and/or value format; "
+                                 + "For more information, please refer to NEWS.txt*"]
+
     if acceptable_errors is None:
-        acceptable_errors = ["WARN.*JNA link failure.*unavailable.",
-                             "objc.*Class JavaLaunchHelper.*?Which one is undefined.",
-                             # Stress tool JMX connection failure, see CASSANDRA-12437
-                             "Failed to connect over JMX; not collecting these stats",
-                             "Picked up JAVA_TOOL_OPTIONS:.*",
-                             # Warnings for backward compatibility should be logged CASSANDRA-15234
-                             ".*parameters have been deprecated. They have new names and/or value format; "
-                             + "For more information, please refer to NEWS.txt*"]
+        acceptable_errors = default_acceptable_errors
+    else:
+        acceptable_errors = default_acceptable_errors + acceptable_errors
 
     regex_str = r"^({}|\s*|\n)*$".format("|".join(acceptable_errors))
     err_str = err.strip()

@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 class DTestConfig:
     def __init__(self):
+        self.sstable_format = "bti"
         self.use_vnodes = True
         self.use_off_heap_memtables = False
         self.num_tokens = -1
@@ -40,6 +41,10 @@ class DTestConfig:
             self.cassandra_dir = os.path.join(os.getcwd(), "meta_tests/cassandra-dir-4.0-beta")
             self.cassandra_version_from_build = self.get_version_from_build()
             return
+
+        self.sstable_format = config.getoption("--sstable-format")
+        if self.sstable_format:
+            assert self.sstable_format in ['bti', 'big'], "SSTable format {} is invalid - must be either bti or big".format(self.sstable_format)
 
         self.use_vnodes = config.getoption("--use-vnodes")
         self.use_off_heap_memtables = config.getoption("--use-off-heap-memtables")
@@ -89,6 +94,17 @@ class DTestConfig:
             raise UsageError("The selected Cassandra version %s doesn't support the provided option "
                              "--use-off-heap-memtables, see https://issues.apache.org/jira/browse/CASSANDRA-9472 "
                              "for details" % version)
+
+        self.apply_to_env(os.environ, "JVM_EXTRA_OPTS")
+
+    def apply_to_env(self, env, key="JVM_OPTS"):
+        current = env.get(key) or ""
+        if self.sstable_format:
+            default_sstable_format_prop = " -Dcassandra.sstable.format.default=" + self.sstable_format
+            if not current.__contains__("-Dcassandra.sstable.format.default"):
+                env.update({key: (env.get(key) or "") + default_sstable_format_prop})
+            else:
+                logger.debug("Skipped adding {} because it is already in the env key {}: {}".format(default_sstable_format_prop, key, current))
 
     def get_version_from_build(self):
         # There are times when we want to know the C* version we're testing against

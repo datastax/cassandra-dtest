@@ -110,12 +110,15 @@ class TestHelper(Tester):
         if not common.is_win():  # nodetool always prints out on windows
             assert_length_equal(response, 0)  # nodetool does not print anything unless there is an error
 
-    def launch_standalone_scrub(self, ks, cf, reinsert_overflowed_ttl=False, no_validate=False):
+    def launch_standalone_scrub(self, ks, cf, reinsert_overflowed_ttl=False, no_validate=False, acceptable_errors=None):
         """
         Launch the standalone scrub
         """
         node1 = self.cluster.nodelist()[0]
         env = common.make_cassandra_env(node1.get_install_cassandra_root(), node1.get_node_cassandra_root())
+
+        self.dtest_config.apply_to_env(env, "JVM_OPTS")
+
         scrub_bin = node1.get_tool('sstablescrub')
         logger.debug(scrub_bin)
 
@@ -131,7 +134,7 @@ class TestHelper(Tester):
         # if we have less than 64G free space, we get this warning - ignore it
         if err and "Consider adding more capacity" not in err.decode("utf-8"):
             logger.debug(err.decode("utf-8"))
-            assert_stderr_clean(err.decode("utf-8"))
+            assert_stderr_clean(err.decode("utf-8"), acceptable_errors)
 
     def perform_node_tool_cmd(self, cmd, table, indexes):
         """
@@ -158,33 +161,35 @@ class TestHelper(Tester):
         time.sleep(.1)
         return self.get_sstables(table, indexes)
 
-    def standalonescrub(self, table, *indexes):
+    def standalonescrub(self, table, *indexes, acceptable_errors=None):
         """
         Launch standalone scrub on table and indexes, and then return all sstables
         in a dict keyed by the table or index name.
         """
-        self.launch_standalone_scrub(KEYSPACE, table)
+        self.launch_standalone_scrub(ks=KEYSPACE, cf=table, acceptable_errors=acceptable_errors)
         for index in indexes:
             self.launch_standalone_scrub(KEYSPACE, '{}.{}'.format(table, index))
         return self.get_sstables(table, indexes)
 
-    def increment_generation_by(self, sstable, generation_increment):
+    def get_latest_generation(self, sstables):
         """
-        Set the generation number for an sstable file name
+        Get the latest generation ID of the provided sstables
         """
-        return re.sub('(\d(?!\d))\-', lambda x: str(int(x.group(1)) + generation_increment) + '-', sstable)
-
-    def increase_sstable_generations(self, sstables):
-        """
-        After finding the number of existing sstables, increase all of the
-        generations by that amount.
-        """
+        latest_gen = None
         for table_or_index, table_sstables in list(sstables.items()):
-            increment_by = len(set(parse.search('{}-{increment_by}-{suffix}.{file_extention}', s).named['increment_by'] for s in table_sstables))
-            sstables[table_or_index] = [self.increment_generation_by(s, increment_by) for s in table_sstables]
+            gen = max(parse.search('{}-{generation}-{}.{}', s).named['generation'] for s in table_sstables)
+            latest_gen = gen if latest_gen is None else max([gen, latest_gen])
+        return latest_gen
 
-        logger.debug('sstables after increment {}'.format(str(sstables)))
-
+    def get_earliest_generation(self, sstables):
+        """
+        Get the earliest generation ID of the provided sstables
+        """
+        earliest_gen = None
+        for table_or_index, table_sstables in list(sstables.items()):
+            gen = min(parse.search('{}-{generation}-{}.{}', s).named['generation'] for s in table_sstables)
+            earliest_gen = gen if earliest_gen is None else min([gen, earliest_gen])
+        return earliest_gen
 
 @since('2.2')
 class TestScrubIndexes(TestHelper):
@@ -237,16 +242,15 @@ class TestScrubIndexes(TestHelper):
         initial_sstables = self.flush('users', 'gender_idx', 'state_idx', 'birth_year_idx')
         scrubbed_sstables = self.scrub('users', 'gender_idx', 'state_idx', 'birth_year_idx')
 
-        self.increase_sstable_generations(initial_sstables)
-        assert initial_sstables == scrubbed_sstables
+        assert self.get_latest_generation(initial_sstables) < self.get_earliest_generation(scrubbed_sstables)
 
         users = self.query_users(session)
         assert initial_users == users
 
         # Scrub and check sstables and data again
+        initial_sstables = scrubbed_sstables
         scrubbed_sstables = self.scrub('users', 'gender_idx', 'state_idx', 'birth_year_idx')
-        self.increase_sstable_generations(initial_sstables)
-        assert initial_sstables == scrubbed_sstables
+        assert self.get_latest_generation(initial_sstables) < self.get_earliest_generation(scrubbed_sstables)
 
         users = self.query_users(session)
         assert initial_users == users
@@ -278,8 +282,7 @@ class TestScrubIndexes(TestHelper):
         cluster.stop()
 
         scrubbed_sstables = self.standalonescrub('users', 'gender_idx', 'state_idx', 'birth_year_idx')
-        self.increase_sstable_generations(initial_sstables)
-        assert initial_sstables == scrubbed_sstables
+        assert self.get_latest_generation(initial_sstables) < self.get_earliest_generation(scrubbed_sstables)
 
         cluster.start()
         session = self.patient_cql_connection(node1)
@@ -312,16 +315,14 @@ class TestScrubIndexes(TestHelper):
         initial_sstables = self.flush('users', 'user_uuids_idx')
         scrubbed_sstables = self.scrub('users', 'user_uuids_idx')
 
-        self.increase_sstable_generations(initial_sstables)
-        assert initial_sstables == scrubbed_sstables
+        assert self.get_latest_generation(initial_sstables) < self.get_earliest_generation(scrubbed_sstables)
 
         users = list(session.execute(("SELECT * from users where uuids contains {some_uuid}").format(some_uuid=_id)))
         assert initial_users == users
 
+        initial_sstables = scrubbed_sstables
         scrubbed_sstables = self.scrub('users', 'user_uuids_idx')
-
-        self.increase_sstable_generations(initial_sstables)
-        assert initial_sstables == scrubbed_sstables
+        assert self.get_latest_generation(initial_sstables) < self.get_earliest_generation(scrubbed_sstables)
 
         users = list(session.execute(("SELECT * from users where uuids contains {some_uuid}").format(some_uuid=_id)))
 
@@ -374,16 +375,15 @@ class TestScrub(TestHelper):
         initial_sstables = self.flush('users')
         scrubbed_sstables = self.scrub('users')
 
-        self.increase_sstable_generations(initial_sstables)
-        assert initial_sstables == scrubbed_sstables
+        assert self.get_latest_generation(initial_sstables) < self.get_earliest_generation(scrubbed_sstables)
 
         users = self.query_users(session)
         assert initial_users == users
 
         # Scrub and check sstables and data again
+        initial_sstables = scrubbed_sstables
         scrubbed_sstables = self.scrub('users')
-        self.increase_sstable_generations(initial_sstables)
-        assert initial_sstables == scrubbed_sstables
+        assert self.get_latest_generation(initial_sstables) < self.get_earliest_generation(scrubbed_sstables)
 
         users = self.query_users(session)
         assert initial_users == users
@@ -415,8 +415,7 @@ class TestScrub(TestHelper):
         cluster.stop()
 
         scrubbed_sstables = self.standalonescrub('users')
-        self.increase_sstable_generations(initial_sstables)
-        assert initial_sstables == scrubbed_sstables
+        assert self.get_latest_generation(initial_sstables) < self.get_earliest_generation(scrubbed_sstables)
 
         cluster.start()
         session = self.patient_cql_connection(node1)
@@ -443,9 +442,8 @@ class TestScrub(TestHelper):
 
         self.delete_non_essential_sstable_files('users')
 
-        scrubbed_sstables = self.standalonescrub('users')
-        self.increase_sstable_generations(initial_sstables)
-        assert initial_sstables == scrubbed_sstables
+        scrubbed_sstables = self.standalonescrub(table='users', acceptable_errors=["WARN.*Could not recreate or deserialize existing bloom filter, continuing with a pass-through bloom filter but this will significantly impact reads performance"])
+        assert self.get_latest_generation(initial_sstables) < self.get_earliest_generation(scrubbed_sstables)
 
         cluster.start()
         session = self.patient_cql_connection(node1)
