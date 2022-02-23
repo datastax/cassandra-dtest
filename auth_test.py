@@ -8,9 +8,9 @@ import re
 import pytest
 import logging
 
-from cassandra import AuthenticationFailed, InvalidRequest, Unauthorized, Unavailable
+from cassandra import AuthenticationFailed, InvalidRequest, Unauthorized
 from cassandra.cluster import NoHostAvailable
-from cassandra.protocol import ServerError, SyntaxException
+from cassandra.protocol import SyntaxException
 
 from dtest_setup_overrides import DTestSetupOverrides
 from dtest import Tester
@@ -24,7 +24,18 @@ from tools.misc import ImmutableMapping
 since = pytest.mark.since
 logger = logging.getLogger(__name__)
 
-class TestAuth(Tester):
+
+class AbstractTestAuth(Tester):
+
+    def role_creator_permissions(self, creator, role):
+        if self.dtest_config.cassandra_version_from_build >= '3.0':
+            permissions = ('ALTER', 'DROP', 'DESCRIBE', 'AUTHORIZE')
+        else:
+            permissions = ('ALTER', 'DROP', 'DESCRIBE')
+        return [(creator, role, perm) for perm in permissions]
+
+
+class TestAuth(AbstractTestAuth):
 
     @pytest.fixture(autouse=True)
     def fixture_add_additional_log_patterns(self, fixture_dtest_setup):
@@ -969,8 +980,8 @@ class TestAuth(Tester):
             all_permissions.extend(data_resource_creator_permissions('cassandra', '<keyspace ks>'))
             all_permissions.extend(data_resource_creator_permissions('cassandra', '<table ks.cf>'))
             all_permissions.extend(data_resource_creator_permissions('cassandra', '<table ks.cf2>'))
-            all_permissions.extend(role_creator_permissions('cassandra', '<role bob>'))
-            all_permissions.extend(role_creator_permissions('cassandra', '<role cathy>'))
+            all_permissions.extend(self.role_creator_permissions('cassandra', '<role bob>'))
+            all_permissions.extend(self.role_creator_permissions('cassandra', '<role cathy>'))
 
         self.assertPermissionsListed(all_permissions, cassandra, "LIST ALL PERMISSIONS")
 
@@ -1175,7 +1186,7 @@ def data_resource_creator_permissions(creator, resource):
 
 
 @since('2.2')
-class TestAuthRoles(Tester):
+class TestAuthRoles(AbstractTestAuth):
 
     Role = None
     cassandra_role = None
@@ -1393,10 +1404,10 @@ class TestAuthRoles(Tester):
                         STYPE int
                         INITCOND 0""")
 
-        cassandra_permissions = role_creator_permissions('cassandra', '<role mike>')
+        cassandra_permissions = self.role_creator_permissions('cassandra', '<role mike>')
         mike_permissions = [('mike', '<all roles>', 'CREATE'),
                             ('mike', '<all keyspaces>', 'CREATE')]
-        mike_permissions.extend(role_creator_permissions('mike', '<role role1>'))
+        mike_permissions.extend(self.role_creator_permissions('mike', '<role role1>'))
         mike_permissions.extend(data_resource_creator_permissions('mike', '<keyspace ks>'))
         mike_permissions.extend(data_resource_creator_permissions('mike', '<table ks.cf>'))
         mike_permissions.extend(function_resource_creator_permissions('mike', '<function ks.state_function_1(int, int)>'))
@@ -1722,9 +1733,7 @@ class TestAuthRoles(Tester):
 
         # GRANT ALL ON ROLE does not include CREATE (because the role must already be created before the GRANT)
         self.superuser.execute("GRANT ALL ON ROLE role1 TO mike")
-        self.assert_permissions_listed([("mike", "<role role1>", "ALTER"),
-                                        ("mike", "<role role1>", "DROP"),
-                                        ("mike", "<role role1>", "AUTHORIZE")],
+        self.assert_permissions_listed(self.role_creator_permissions("mike", "<role role1>"),
                                        self.superuser,
                                        "LIST ALL PERMISSIONS OF mike")
         assert_invalid(self.superuser,
@@ -1801,9 +1810,9 @@ class TestAuthRoles(Tester):
                                 ("role2", "<role role1>", "ALTER")]
         expected_permissions.extend(data_resource_creator_permissions('cassandra', '<keyspace ks>'))
         expected_permissions.extend(data_resource_creator_permissions('cassandra', '<table ks.cf>'))
-        expected_permissions.extend(role_creator_permissions('cassandra', '<role mike>'))
-        expected_permissions.extend(role_creator_permissions('cassandra', '<role role1>'))
-        expected_permissions.extend(role_creator_permissions('cassandra', '<role role2>'))
+        expected_permissions.extend(self.role_creator_permissions('cassandra', '<role mike>'))
+        expected_permissions.extend(self.role_creator_permissions('cassandra', '<role role1>'))
+        expected_permissions.extend(self.role_creator_permissions('cassandra', '<role role2>'))
 
         self.assert_permissions_listed(expected_permissions, self.superuser, "LIST ALL PERMISSIONS")
 
@@ -1817,10 +1826,8 @@ class TestAuthRoles(Tester):
                                        self.superuser,
                                        "LIST ALL PERMISSIONS OF role2")
 
-        self.assert_permissions_listed([("cassandra", "<role role1>", "ALTER"),
-                                        ("cassandra", "<role role1>", "DROP"),
-                                        ("cassandra", "<role role1>", "AUTHORIZE"),
-                                        ("role2", "<role role1>", "ALTER")],
+        self.assert_permissions_listed(self.role_creator_permissions("cassandra", "<role role1>") +
+                                       [("role2", "<role role1>", "ALTER")],
                                        self.superuser,
                                        "LIST ALL PERMISSIONS ON ROLE role1")
         # we didn't specifically grant DROP on role1, so only it's creator should have it
@@ -2737,15 +2744,18 @@ class TestAuthRoles(Tester):
 
 
 @since('2.2')
-class TestAuthUnavailable(Tester):
+class TestAuthUnavailable(AbstractTestAuth):
     """
     * These tests verify behavior when backends for authentication & authorization are unable to pull data from the
-    * system_auth keyspace. Failure scenarios are simulated based on the assumption that internal queries for role
-    * hierarchies and role properties of the "cassandra" super-user get CL=QUORUM (other roles get CL=LOCAL_ONE). And so
-    * we expect these internal queries to fail when one of two nodes are down and system_auth have RF=2. Though the
-    * permissions cache is used in these tests, it is always populated by permissions derived from the super-user status
-    * (all applicable to resource) of the "cassandra" user. The network_authorizer is always disabled to make sure the
-    * queries utilize the role/permissions cache only.
+    * system_auth keyspace. Failure scenarios are simulated based on the default CL for auth being LOCAL_QUORUM for reads,
+    * EACH_QUORUM for writes. We expect these internal queries to fail when one of the two nodes are down and system_auth
+    * has RF=2. Though the permissions cache is used in these tests, it is always populated by permissions derived from
+    * the super-user status (all applicable to resource) of the "cassandra" user. The network_authorizer is always disabled
+    * to make sure the queries utilize the role/permissions cache only.
+    *
+    * Notably, the default CL changed from a combination of ONE, LOCAL_ONE, and QUORUM <= 4.0 to the above in version 4.1+;
+    * we simply relax the constraint on the expected CL found in the error message to allow these tests to satisfy both
+    * release regimes.
     """
 
     def test_authentication_handle_unavailable(self):
@@ -2779,7 +2789,7 @@ class TestAuthUnavailable(Tester):
             # AuthenticationFailed from server
             assert re.search("code=0100", str(e))
             # Message from server
-            assert re.search("Unable to perform authentication:.* Cannot achieve consistency level QUORUM", str(e))
+            assert re.search("Unable to perform authentication:.* Cannot achieve consistency level", str(e))
 
     def test_authentication_through_cache_handle_unavailable(self):
         """
@@ -2818,7 +2828,7 @@ class TestAuthUnavailable(Tester):
             # AuthenticationFailed from server
             assert re.search("code=0100", str(e))
             # Message from server
-            assert re.search("Unable to perform authentication:.* Cannot achieve consistency level QUORUM", str(e))
+            assert re.search("Unable to perform authentication:.* Cannot achieve consistency level", str(e))
 
     @since('4.0')
     def test_authentication_from_cache_while_unavailable(self):
@@ -2909,7 +2919,7 @@ class TestAuthUnavailable(Tester):
 
         node1.stop()
 
-        assert_exception(cassandra, "SELECT * from ks.cf", matching="Unable to perform authorization of super-user permission: Cannot achieve consistency level QUORUM", expected=Unauthorized)
+        assert_exception(cassandra, "SELECT * from ks.cf", matching="Unable to perform authorization of super-user permission: Cannot achieve consistency level", expected=Unauthorized)
 
     def test_authorization_through_cache_handle_unavailable(self):
         """
@@ -2943,7 +2953,7 @@ class TestAuthUnavailable(Tester):
         # Wait for cache to timeout
         time.sleep(1)
 
-        assert_exception(cassandra, "SELECT * from ks.cf", matching="Unable to perform authorization of super-user permission: Cannot achieve consistency level QUORUM", expected=Unauthorized)
+        assert_exception(cassandra, "SELECT * from ks.cf", matching="Unable to perform authorization of super-user permission: Cannot achieve consistency level", expected=Unauthorized)
 
     def test_authorization_from_cache_while_unavailable(self):
         """
@@ -3057,7 +3067,7 @@ class TestAuthUnavailable(Tester):
 
 
 @since('4.0')
-class TestNetworkAuth(Tester):
+class TestNetworkAuth(AbstractTestAuth):
 
     @pytest.fixture(autouse=True)
     def fixture_setup_auth(self, fixture_dtest_setup):
@@ -3077,8 +3087,7 @@ class TestNetworkAuth(Tester):
         fixture_dtest_setup.superuser.execute("CREATE TABLE ks.tbl (k int primary key, v int)")
 
     def username(self):
-        return ''.join(random.choice(string.ascii_lowercase) for _ in range(8));
-
+        return ''.join(random.choice(string.ascii_lowercase) for _ in range(8))
 
     def create_user(self, query_fmt, username):
         """
@@ -3109,8 +3118,8 @@ class TestNetworkAuth(Tester):
         with JolokiaAgent(node) as jmx:
             jmx.execute_method(mbean, 'invalidate')
 
-    def clear_network_auth_cache(self, node):
-        mbean = make_mbean('auth', type='NetworkAuthCache')
+    def clear_network_auth_cache(self, node, cache_name='NetworkPermissionsCache'):
+        mbean = make_mbean('auth', type=cache_name)
         with JolokiaAgent(node) as jmx:
             jmx.execute_method(mbean, 'invalidate')
 
@@ -3131,16 +3140,25 @@ class TestNetworkAuth(Tester):
         if a user's access to a dc is revoked while they're connected,
         all of their requests should fail once the cache is cleared
         """
-        username = self.username()
-        self.create_user("CREATE ROLE %s WITH password = 'password' AND LOGIN = true", username)
-        self.assertConnectsTo(username, self.dc1_node)
-        self.assertConnectsTo(username, self.dc2_node)
+        def test_revoked_access(cache_name):
+            logger.debug('Testing with cache name: %s' % cache_name)
+            username = self.username()
+            self.create_user("CREATE ROLE %s WITH password = 'password' AND LOGIN = true", username)
+            self.assertConnectsTo(username, self.dc1_node)
+            self.assertConnectsTo(username, self.dc2_node)
 
-        # connect to the dc2 node, then remove permission for it
-        session = self.exclusive_cql_connection(self.dc2_node, user=username, password='password')
-        self.superuser.execute("ALTER ROLE %s WITH ACCESS TO DATACENTERS {'dc1'}" % username)
-        self.clear_network_auth_cache(self.dc2_node)
-        self.assertUnauthorized(lambda: session.execute("SELECT * FROM ks.tbl"))
+            # connect to the dc2 node, then remove permission for it
+            session = self.exclusive_cql_connection(self.dc2_node, user=username, password='password')
+            self.superuser.execute("ALTER ROLE %s WITH ACCESS TO DATACENTERS {'dc1'}" % username)
+            self.clear_network_auth_cache(self.dc2_node, cache_name)
+            self.assertUnauthorized(lambda: session.execute("SELECT * FROM ks.tbl"))
+
+        if self.dtest_config.cassandra_version_from_build >= '4.1':
+            test_revoked_access("NetworkPermissionsCache")
+
+        # deprecated cache name, scheduled for removal in 5.0
+        if self.dtest_config.cassandra_version_from_build < '5.0':
+            test_revoked_access("NetworkAuthCache")
 
     def test_create_dc_validation(self):
         """
@@ -3176,12 +3194,11 @@ class TestNetworkAuth(Tester):
         session = self.exclusive_cql_connection(self.dc2_node, user=username, password='password')
         superuser.execute("ALTER ROLE %s WITH LOGIN=false" % username)
         self.clear_roles_cache(self.dc2_node)
-        self.clear_network_auth_cache(self.dc2_node)
+
+        cache_name = "NetworkPermissionsCache" if self.dtest_config.cassandra_version_from_build >= '4.1' else "NetworkAuthCache"
+        self.clear_network_auth_cache(self.dc2_node, cache_name)
+
         self.assertUnauthorized(lambda: session.execute("SELECT * FROM ks.tbl"))
-
-
-def role_creator_permissions(creator, role):
-    return [(creator, role, perm) for perm in ('ALTER', 'DROP', 'AUTHORIZE')]
 
 
 def function_resource_creator_permissions(creator, resource):

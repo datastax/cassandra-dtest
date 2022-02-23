@@ -10,7 +10,7 @@ import logging
 from ccmlib import common as ccmcommon
 from ccmlib.node import ToolError
 
-from dtest import Tester, create_ks, create_cf, MAJOR_VERSION_4
+from dtest import Tester, create_ks, create_cf, mk_bman_path, MAJOR_VERSION_4
 from tools.assertions import assert_all, assert_none, assert_one
 
 since = pytest.mark.since
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 # Also used by upgrade_tests/storage_engine_upgrade_test
 # to test loading legacy sstables
-class TestBaseSStableLoader(Tester):
+class BaseSStableLoaderTester(Tester):
 
     @pytest.fixture(autouse=True)
     def fixture_add_additional_log_patterns(self, fixture_dtest_setup):
@@ -250,7 +250,7 @@ class TestBaseSStableLoader(Tester):
                     assert 0 == len(temp_files), "Temporary files were not cleaned up."
 
 
-class TestSSTableGenerationAndLoading(TestBaseSStableLoader):
+class TestSSTableGenerationAndLoading(BaseSStableLoaderTester):
 
     def test_sstableloader_uppercase_keyspace_name(self):
         """
@@ -394,7 +394,7 @@ class TestSSTableGenerationAndLoading(TestBaseSStableLoader):
         assert_one(session, "SELECT * FROM k.t WHERE v = 8", [0, 2, 8])
 
         # Load SSTables with a failure during index creation
-        node.byteman_submit(['./byteman/index_build_failure.btm'])
+        node.byteman_submit([mk_bman_path('index_build_failure.btm')])
         with pytest.raises(Exception):
             self.load_sstables(cluster, node, 'k')
 

@@ -44,7 +44,8 @@ class TestOfflineTools(Tester):
         except ToolError as e:
             assert re.search("ColumnFamily not found: keyspace1/standard1", str(e))
             # this should return exit code 1
-            assert e.exit_status == 1, "Expected sstablelevelreset to have a return code of 1 == but instead return code was {}".format(e.exit_status)
+            assert e.exit_status == 1, "Expected sstablelevelreset to have a return code of 1 == but instead return code was {}".format(
+                e.exit_status)
 
         # now test by generating keyspace but not flushing sstables
         cluster.start()
@@ -60,7 +61,8 @@ class TestOfflineTools(Tester):
         # test by writing small amount of data and flushing (all sstables should be level 0)
         cluster.start()
         session = self.patient_cql_connection(node1)
-        session.execute("ALTER TABLE keyspace1.standard1 with compaction={'class': 'LeveledCompactionStrategy', 'sstable_size_in_mb':1};")
+        session.execute(
+            "ALTER TABLE keyspace1.standard1 with compaction={'class': 'LeveledCompactionStrategy', 'sstable_size_in_mb':1};")
         node1.stress(['write', 'n=1K', 'no-warmup', '-schema', 'replication(factor=1)',
                       '-rate', 'threads=8'])
         node1.flush()
@@ -149,7 +151,8 @@ class TestOfflineTools(Tester):
         cluster.start()
         session = self.patient_cql_connection(node1)
         logger.debug("Altering compaction strategy to LCS")
-        session.execute("ALTER TABLE keyspace1.standard1 with compaction={'class': 'LeveledCompactionStrategy', 'sstable_size_in_mb':1, 'enabled':'false'};")
+        session.execute(
+            "ALTER TABLE keyspace1.standard1 with compaction={'class': 'LeveledCompactionStrategy', 'sstable_size_in_mb':1, 'enabled':'false'};")
 
         node1.stress(['write', 'n=1K', 'no-warmup',
                       '-schema', 'replication(factor=1)',
@@ -182,14 +185,16 @@ class TestOfflineTools(Tester):
 
         # Let's reset all sstables to L0
         logger.debug("Getting initial levels")
-        initial_levels = list(self.get_levels(node1.run_sstablemetadata(keyspace="keyspace1", column_families=["standard1"])))
+        initial_levels = list(
+            self.get_levels(node1.run_sstablemetadata(keyspace="keyspace1", column_families=["standard1"])))
         assert [] != initial_levels
         logger.debug('initial_levels:')
         logger.debug(initial_levels)
         logger.debug("Running sstablelevelreset")
         node1.run_sstablelevelreset("keyspace1", "standard1")
         logger.debug("Getting final levels")
-        final_levels = list(self.get_levels(node1.run_sstablemetadata(keyspace="keyspace1", column_families=["standard1"])))
+        final_levels = list(
+            self.get_levels(node1.run_sstablemetadata(keyspace="keyspace1", column_families=["standard1"])))
         assert [] != final_levels
         logger.debug('final levels:')
         logger.debug(final_levels)
@@ -227,8 +232,8 @@ class TestOfflineTools(Tester):
         Test on potential situations: deleted sstables, corrupted sstables
         """
         cluster = self.cluster
-        cluster.populate(3).start()
-        node1, node2, node3 = cluster.nodelist()
+        cluster.populate(1).start()
+        node1 = cluster.nodelist()[0]
 
         # test on nonexistent keyspace
         try:
@@ -238,16 +243,18 @@ class TestOfflineTools(Tester):
             assert e.exit_status == 1, str(e.exit_status)
 
         # test on nonexistent sstables:
-        node1.stress(['write', 'n=100', 'no-warmup', '-schema', 'replication(factor=3)',
+        node1.stress(['write', 'n=100', 'no-warmup', '-schema', 'replication(factor=1)',
                       '-rate', 'threads=8'])
         (out, err, rc) = node1.run_sstableverify("keyspace1", "standard1")
         assert rc == 0, str(rc)
 
+        # only works on existing ks/cf, but we just created them
+        node1.nodetool("disableautocompaction")
         # Generate multiple sstables and test works properly in the simple case
-        node1.stress(['write', 'n=100K', 'no-warmup', '-schema', 'replication(factor=3)',
+        node1.stress(['write', 'n=100K', 'no-warmup', '-schema', 'replication(factor=1)',
                       '-rate', 'threads=8'])
         node1.flush()
-        node1.stress(['write', 'n=100K', 'no-warmup', '-schema', 'replication(factor=3)',
+        node1.stress(['write', 'n=100K', 'no-warmup', '-schema', 'replication(factor=1)',
                       '-rate', 'threads=8'])
         node1.flush()
         cluster.stop()
@@ -260,8 +267,8 @@ class TestOfflineTools(Tester):
         # Java-normalized paths. To later compare these with Python-normalized paths, we
         # map over each line of out and replace Java-normalized paths with Python equivalents.
         outlines = [re.sub("(?<=path=').*(?=')",
-                                           lambda match: os.path.normcase(match.group(0)),
-                                           line) for line in out.splitlines()]
+                           lambda match: os.path.normcase(match.group(0)),
+                           line) for line in out.splitlines()]
 
         # check output is correct for each sstable
         sstables = self._get_final_sstables(node1, "keyspace1", "standard1")
@@ -297,10 +304,10 @@ class TestOfflineTools(Tester):
             (out, error, rc) = node1.run_sstableverify("keyspace1", "standard1", options=['-v'])
             assert False, "sstable verify did not fail; rc={}\nout={}\nerr={}".format(str(rc), out, error)
         except ToolError as e:
-            # Process sstableverify output to normalize paths in string to Python casing as above
-            error = re.sub("(?<=WARNING: Corrupted SSTable : ).*", lambda match: os.path.normcase(match.group(0)), str(e))
-
-            assert re.search("WARNING: Corrupted SSTable : " + sstable1, error)
+            m = re.match("(?ms).*Corrupted SSTable : (?P<sstable>\S+)", str(e))
+            assert m is not None, str(e)
+            # MacOS might use the "private" prefix.
+            assert os.path.normcase(m.group('sstable')).replace("/private/var/folders", "/var/folders") == sstable1
             assert e.exit_status == 1, str(e.exit_status)
 
     def test_sstableexpiredblockers(self):
@@ -453,10 +460,12 @@ class TestOfflineTools(Tester):
 
     def _check_stderr_error(self, error):
         acceptable = ["Max sstable size of",
-                "Consider adding more capacity",
-                "JNA link failure",
-                "Class JavaLaunchHelper is implemented in both",
-                "Picked up JAVA_TOOL_OPTIONS:"]
+                      "Consider adding more capacity",
+                      "JNA link failure",
+                      "Class JavaLaunchHelper is implemented in both",
+                      "Picked up JAVA_TOOL_OPTIONS:",
+                      # Warnings for backward compatibility should be logged CASSANDRA-15234
+                      "parameters have been deprecated. They have new names and/or value format"]
 
         if len(error) > 0:
             for line in error.splitlines():

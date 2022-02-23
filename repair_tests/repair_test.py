@@ -14,7 +14,7 @@ from cassandra import ConsistencyLevel
 from cassandra.query import SimpleStatement
 from ccmlib.node import ToolError
 
-from dtest import FlakyRetryPolicy, Tester, create_ks, create_cf
+from dtest import FlakyRetryPolicy, Tester, create_ks, create_cf, mk_bman_path
 from tools.data import insert_c1c2, query_c1c2
 from tools.jmxutils import JolokiaAgent, make_mbean
 from repair_tests.incremental_repair_test import assert_parent_repair_session_count
@@ -110,12 +110,12 @@ class BaseRepairTest(Tester):
 
         # Insert 1000 keys, kill node 3, insert 1 key, restart node 3, insert 1000 more keys
         logger.debug("Inserting data...")
-        insert_c1c2(session, n=1000, consistency=ConsistencyLevel.ALL)
+        insert_c1c2(session, n=1000, consistency=ConsistencyLevel.ALL, ks='ks')
         node3.flush()
         node3.stop(wait_other_notice=True)
-        insert_c1c2(session, keys=(1000, ), consistency=ConsistencyLevel.TWO)
+        insert_c1c2(session, keys=(1000, ), consistency=ConsistencyLevel.TWO, ks='ks')
         node3.start(wait_for_binary_proto=True)
-        insert_c1c2(session, keys=list(range(1001, 2001)), consistency=ConsistencyLevel.ALL)
+        insert_c1c2(session, keys=list(range(1001, 2001)), consistency=ConsistencyLevel.ALL, ks='ks')
 
         cluster.flush()
 
@@ -735,13 +735,13 @@ class TestRepair(BaseRepairTest):
 
         # Insert 1000 keys, kill node 2, insert 1 key, restart node 2, insert 1000 more keys
         logger.debug("Inserting data...")
-        insert_c1c2(session, n=1000, consistency=ConsistencyLevel.ALL)
+        insert_c1c2(session, n=1000, consistency=ConsistencyLevel.ALL, ks='ks')
         node2.flush()
         node2.stop(wait_other_notice=True)
-        insert_c1c2(session, keys=(1000, ), consistency=ConsistencyLevel.THREE)
+        insert_c1c2(session, keys=(1000, ), consistency=ConsistencyLevel.THREE, ks='ks')
         node2.start(wait_for_binary_proto=True)
         node1.watch_log_for_alive(node2)
-        insert_c1c2(session, keys=list(range(1001, 2001)), consistency=ConsistencyLevel.ALL)
+        insert_c1c2(session, keys=list(range(1001, 2001)), consistency=ConsistencyLevel.ALL, ks='ks')
 
         cluster.flush()
 
@@ -1334,7 +1334,7 @@ class TestRepair(BaseRepairTest):
 
         logger.debug("Submitting byteman script to {}".format(node_to_kill.name))
         # Sleep on anticompaction/stream so there will be time for node to be killed
-        node_to_kill.byteman_submit(['./byteman/{}'.format(script)])
+        node_to_kill.byteman_submit([mk_bman_path(script)])
 
         def node1_repair():
             global nodetool_error

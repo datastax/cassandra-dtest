@@ -13,7 +13,7 @@ from cassandra import ConsistencyLevel, ReadTimeout, Unavailable
 from cassandra.query import SimpleStatement
 from ccmlib.node import Node
 
-from dtest import Tester
+from dtest import Tester, mk_bman_path
 from tools.assertions import assert_bootstrap_state, assert_all, assert_not_running
 from tools.data import rows_to_list
 
@@ -359,6 +359,31 @@ class TestReplaceAddress(BaseReplaceAddressTest):
             node3.watch_log_for('Use cassandra.replace_address if you want to replace this node', from_mark=mark, timeout=20)
             mark = node3.mark_log()
 
+    @since('3.0')
+    def test_fail_when_seed(self):
+        """
+        When a node is a seed replace should fail
+        @jira_ticket CASSANDRA-14463
+        """
+        self.fixture_dtest_setup.ignore_log_patterns = list(self.fixture_dtest_setup.ignore_log_patterns) + [
+            r'Exception encountered during startup']
+
+        self._setup(n=3)
+        node1, node2, node3 = self.cluster.nodelist()
+        self.cluster.seeds.append(node3.address())
+
+        node3.stop(gently=False)
+        mark = node3.mark_log()
+
+        for d in chain([os.path.join(node3.get_path(), "commitlogs")],
+                       [os.path.join(node3.get_path(), "saved_caches")],
+                       node3.data_directories()):
+            if os.path.exists(d):
+                rmtree(d)
+
+        node3.start(jvm_args=["-Dcassandra.replace_address=" + node3.address()], wait_other_notice=False)
+        node3.watch_log_for('Replacing a node without bootstrapping risks invalidating consistency guarantees', from_mark=mark, timeout=20)
+
     @since('3.6')
     def test_unsafe_replace(self):
         """
@@ -468,13 +493,13 @@ class TestReplaceAddress(BaseReplaceAddressTest):
         btmmark = self.query_node.mark_log()
 
         if self.cluster.version() < '4.0':
-            self.query_node.byteman_submit(['./byteman/pre4.0/stream_failure.btm'])
+            self.query_node.byteman_submit([mk_bman_path('pre4.0/stream_failure.btm')])
             self._do_replace(jvm_option='replace_address_first_boot',
                              opts={'streaming_socket_timeout_in_ms': 1000},
                              wait_for_binary_proto=False,
                              wait_other_notice=True)
         else:
-            self.query_node.byteman_submit(['./byteman/4.0/stream_failure.btm'])
+            self.query_node.byteman_submit([mk_bman_path('4.0/stream_failure.btm')])
             self._do_replace(jvm_option='replace_address_first_boot', wait_for_binary_proto=False, wait_other_notice=True)
 
         # Make sure bootstrap did not complete successfully
@@ -513,7 +538,7 @@ class TestReplaceAddress(BaseReplaceAddressTest):
             self._cleanup(self.replacement_node)
             self.replacement_node.start(jvm_args=["-Dcassandra.replace_address_first_boot={}"
                                         .format(self.replaced_node.address())],
-                                        wait_for_binary_proto=True)
+                                        wait_for_binary_proto=120)
         else:
             raise RuntimeError('invalid mode value {mode}'.format(mode=mode))
 
@@ -547,17 +572,12 @@ class TestReplaceAddress(BaseReplaceAddressTest):
         self.replacement_node.watch_log_for("Unable to find sufficient sources for streaming range")
         assert_not_running(self.replacement_node)
 
-    @flaky
-    @pytest.mark.vnodes
     def test_multi_dc_replace_with_rf1_stcs(self):
         self._test_multi_dc_replace_with_rf1('SizeTieredCompactionStrategy')
 
-    @flaky
-    @pytest.mark.vnodes
     @since("4.0")
     def test_multi_dc_replace_with_rf1_ucs(self):
         self._test_multi_dc_replace_with_rf1('UnifiedCompactionStrategy')
-
 
     def _test_multi_dc_replace_with_rf1(self, compaction_strategy):
         """
