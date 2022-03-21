@@ -185,6 +185,13 @@ def fixture_logging_setup(request):
         if request.config.inicfg.get("log_format") is not None:
             logging_format = request.config.inicfg.get("log_format")
 
+    # ccm logger is configured to spit everything to console
+    # we want it to use logging setup configured for tests
+    # unless we do that, we get duplicated log records from ccm module
+    ccmLogger = logging.getLogger("ccm")
+    for handler in ccmLogger.handlers:
+        logging.getLogger("ccm").removeHandler(handler)
+
     logging.basicConfig(level=log_level,
                         format=logging_format)
 
