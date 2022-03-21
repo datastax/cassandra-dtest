@@ -123,9 +123,9 @@ class TestCqlshCopy(Tester):
 
         if auth_enabled:
             self.node1.watch_log_for('Created default superuser')
-            self.session = self.patient_cql_connection(self.node1, user='cassandra', password='cassandra')
+            self.session = self.patient_cql_connection(self.node1, user='cassandra', password='cassandra', request_timeout=30.0)
         else:
-            self.session = self.patient_cql_connection(self.node1)
+            self.session = self.patient_cql_connection(self.node1, request_timeout=30.0)
 
         self.session.execute('DROP KEYSPACE IF EXISTS ks')
         self.ks = 'ks'
@@ -2387,6 +2387,9 @@ class TestCqlshCopy(Tester):
         # enough for truncating larger tables, see CASSANDRA-11157
         if 'truncate_request_timeout_in_ms' not in configuration_options:
             configuration_options['truncate_request_timeout_in_ms'] = 60000
+        configuration_options['request_timeout_in_ms'] = 60000
+        configuration_options['read_request_timeout_in_ms'] = 60000
+        configuration_options['range_request_timeout_in_ms'] = 60000
 
         self.prepare(nodes=nodes, partitioner=partitioner, configuration_options=configuration_options)
 
@@ -2406,7 +2409,7 @@ class TestCqlshCopy(Tester):
             else:
                 count_statement = SimpleStatement("SELECT COUNT(*) FROM {}".format(stress_table), consistency_level=ConsistencyLevel.ALL,
                                                   retry_policy=FlakyRetryPolicy(max_retries=3))
-                ret = rows_to_list(self.session.execute(count_statement))[0][0]
+                ret = rows_to_list(self.session.execute(query=count_statement, timeout=60.0))[0][0]
                 logger.debug('Generated {} records'.format(ret))
                 assert ret >= num_operations, 'cassandra-stress did not import enough records'
                 return ret
