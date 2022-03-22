@@ -894,6 +894,12 @@ class BootstrapTester(Tester):
                           " cannot bootstrap while cassandra.consistent.rangemovement is true"
 
         cluster = self.cluster
+        configuration_options = {
+            'request_timeout_in_ms': 120000,
+            'read_request_timeout_in_ms': 120000,
+            'range_request_timeout_in_ms': 120000
+        }
+        cluster.set_configuration_options(configuration_options)
         cluster.set_environment_variable('CASSANDRA_TOKEN_PREGENERATION_DISABLED', 'True')
         cluster.populate(1)
         cluster.start()
@@ -929,8 +935,10 @@ class BootstrapTester(Tester):
         # bugs like 9484, where count(*) fails at higher
         # data loads.
         for _ in range(5):
+            logger.info("Querying: SELECT count(*) from keyspace1.standard1")
             # Improve reliability for slower/loaded test systems by using larger client timeout
-            assert_one(session, "SELECT count(*) from keyspace1.standard1", [500000], cl=ConsistencyLevel.ONE, timeout=30)
+            assert_one(session, "SELECT count(*) from keyspace1.standard1", [500000], cl=ConsistencyLevel.ONE, timeout=180)
+            logger.info("Querying completed")
 
     def test_cleanup(self):
         """
