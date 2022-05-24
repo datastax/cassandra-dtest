@@ -42,6 +42,9 @@ def check_required_loopback_interfaces_available():
 
 
 def pytest_addoption(parser):
+    parser.addoption("--sstable-format", action="store", default="bti",
+                     help="SSTable format to be used by default for all newly created SSTables: "
+                          "big or bti (default: bti)")
     parser.addoption("--use-vnodes", action="store_true", default=False,
                      help="Determines wither or not to setup clusters using vnodes for tests")
     parser.addoption("--use-off-heap-memtables", action="store_true", default=False,
@@ -174,6 +177,13 @@ def fixture_logging_setup(request):
     except ValueError:
         if pytest.config.inicfg.get("log_format") is not None:
             logging_format = pytest.config.inicfg.get("log_format")
+
+    # ccm logger is configured to spit everything to console
+    # we want it to use logging setup configured for tests
+    # unless we do that, we get duplicated log records from ccm module
+    ccmLogger = logging.getLogger("ccm")
+    for handler in ccmLogger.handlers:
+        logging.getLogger("ccm").removeHandler(handler)
 
     logging.basicConfig(level=log_level,
                         format=logging_format)

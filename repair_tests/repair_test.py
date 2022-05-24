@@ -1,6 +1,7 @@
 import os
 import os.path
 import threading
+import tempfile
 import time
 import re
 import pytest
@@ -1167,8 +1168,7 @@ class TestRepair(BaseRepairTest):
         _, _, rc = node2.stress(['read', 'n=1M', 'no-warmup', '-rate', 'threads=30'], whitelist=True)
         assert rc == 0
 
-    @since('4.0')
-    def test_wide_row_repair(self):
+    def _test_wide_row_repair(self, compaction_strategy):
         """
         @jira_ticket CASSANDRA-13899
         Make sure compressed vs uncompressed blocks are handled correctly when stream decompressing
@@ -1178,12 +1178,25 @@ class TestRepair(BaseRepairTest):
         cluster.populate(2).start()
         node1, node2 = cluster.nodelist()
         node2.stop(wait_other_notice=True)
-        profile_path = os.path.join(os.getcwd(), 'stress_profiles/repair_wide_rows.yaml')
-        logger.info(("yaml = " + profile_path))
-        node1.stress(['user', 'profile=' + profile_path, 'n=50', 'ops(insert=1)', 'no-warmup', '-rate', 'threads=8',
-                      '-insert', 'visits=FIXED(100K)', 'revisit=FIXED(100K)'])
+        template_path = os.path.join(os.getcwd(), 'stress_profiles/repair_wide_rows.yaml.tmpl')
+        with open(template_path) as profile_template:
+            profile = profile_template.read().replace("{{ compaction_strategy }}", compaction_strategy)
+            with tempfile.NamedTemporaryFile(mode='w+') as stress_profile:
+                stress_profile.write(profile)
+                stress_profile.flush()
+                print("yaml = " + stress_profile.name)
+                node1.stress(['user', 'profile=' + stress_profile.name, 'n=50', 'ops(insert=1)', 'no-warmup', '-rate', 'threads=8',
+                             '-insert', 'visits=FIXED(100K)', 'revisit=FIXED(100K)'])
         node2.start(wait_for_binary_proto=True)
         node2.repair()
+
+    @since('4.0')
+    def test_wide_row_repair_lcs(self):
+        self._test_wide_row_repair('LeveledCompactionStrategy')
+
+    @since('4.0')
+    def test_wide_row_repair_ucs(self):
+        self._test_wide_row_repair('UnifiedCompactionStrategy')
 
     @since('2.1', max_version='4')
     def test_dead_coordinator(self):
@@ -1224,6 +1237,40 @@ class TestRepair(BaseRepairTest):
             node1.repair()
         else:
             node1.nodetool('repair keyspace1 standard1 -inc -par')
+
+    @since('3.0')
+    def test_repair_one_node_cluster(self):
+        options = []
+        fix_STAR582 = self.cluster.version() >= "4.0"
+        if not fix_STAR582:
+            options = ['--ignore-unreplicated-keyspaces'] + options
+        self._repair_abort_test(options=options, nodes=1, rf=2)
+
+    @since('3.0')
+    def test_repair_one_node_in_local_dc(self):
+        self._repair_abort_test(options=['--ignore-unreplicated-keyspaces', '--in-local-dc'], nodes=[1, 1], rf={'dc1': 1, 'dc2': 1}, no_common_range=True)
+
+    def _repair_abort_test(self, options=[], nodes=1, rf=1, no_common_range=False):
+        cluster = self.cluster
+        logger.debug("Starting cluster..")
+        cluster.populate(nodes).start(wait_for_binary_proto=True)
+
+        node1 = self.cluster.nodelist()[0]
+        session = self.patient_cql_connection(node1)
+        create_ks(session, 'ks', rf=rf)
+
+        support_preview = self.cluster.version() >= "4.0"
+        if support_preview:
+            logger.debug("Preview repair")
+            out = node1.repair(["--preview"] + options)
+            if no_common_range:
+                assert "Nothing to repair for " in str(out), "Expect 'Nothing to repair for '"
+
+        logger.debug("Full repair")
+        node1.repair(["--full"] + options)
+
+        logger.debug("Incremental repair")
+        node1.repair(options)
 
     @since('2.2')
     def test_dead_sync_initiator(self):
