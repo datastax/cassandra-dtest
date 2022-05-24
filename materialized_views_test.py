@@ -712,7 +712,7 @@ class TestMaterializedViews(Tester):
                     assert_one(session, "SELECT * FROM t_by_v WHERE id = {} and v = {}".format(i, j), [j, i])
 
         node4 = new_node(self.cluster, data_center="dc1")
-        node4.set_configuration_options(values={'max_mutation_size_in_kb': 20})  # CASSANDRA-11670
+        node4.set_configuration_options(values={'max_mutation_size_in_kb': 25})  # CASSANDRA-11670
         logger.debug("Start join at {}".format(time.strftime("%H:%M:%S")))
         node4.start(wait_for_binary_proto=True, jvm_args=["-Dcassandra.migration_task_wait_in_seconds={}".format(MIGRATION_WAIT)])
 
@@ -765,7 +765,7 @@ class TestMaterializedViews(Tester):
                 assert_one(session, "SELECT * FROM t_by_v WHERE id = {} and v = {}".format(i, j), [j, i])
 
         node4 = new_node(self.cluster, data_center="dc1")
-        node4.set_configuration_options(values={'max_mutation_size_in_kb': 20})  # CASSANDRA-11670
+        node4.set_configuration_options(values={'max_mutation_size_in_kb': 25})  # CASSANDRA-11670
         logger.debug("Start join at {}".format(time.strftime("%H:%M:%S")))
         node4.start(wait_for_binary_proto=True, jvm_args=["-Dcassandra.migration_task_wait_in_seconds={}".format(MIGRATION_WAIT)])
 
@@ -1249,6 +1249,15 @@ class TestMaterializedViews(Tester):
 
         logger.debug("Verify that the MV has been successfully created")
         self._wait_for_view('ks', 't_by_v')
+        # The original byteman delay it's still there and can make this flaky CASSANDRA-16962
+        for i in range(10):
+            try:
+                assert_one(session, "SELECT COUNT(*) FROM t_by_v", [5000])
+            except AssertionError:
+                time.sleep(1)
+            else:
+                break
+
         assert_one(session, "SELECT COUNT(*) FROM t_by_v", [5000])
 
     @since('4.0')
@@ -1390,22 +1399,49 @@ class TestMaterializedViews(Tester):
             assert_one(session, "SELECT * FROM mv", [1, 3, 1])
 
         # user provided ttl
-        self.update_view(session, "UPDATE t USING TTL 50 SET a = 4 WHERE k = 1", flush)
-        assert_one(session, "SELECT * FROM t", [1, 4, 1])
-        assert_one(session, "SELECT * FROM mv", [1, 4, 1])
+        start = time.time()
+        self.update_view(session, "UPDATE t USING TTL 100 SET a = 4 WHERE k = 1", flush)
+        try:
+            assert_one(session, "SELECT * FROM t", [1, 4, 1])
+            assert_one(session, "SELECT * FROM mv", [1, 4, 1])
+        except AssertionError as ae:
+            if (time.time() - start) >= 100:
+                pytest.fail("Please increase the 100 TTL which expired before we could test due to a slow env.")
+            else:
+                raise ae
 
-        self.update_view(session, "UPDATE t USING TTL 40 SET a = 5 WHERE k = 1", flush)
-        assert_one(session, "SELECT * FROM t", [1, 5, 1])
-        assert_one(session, "SELECT * FROM mv", [1, 5, 1])
+        start = time.time()
+        self.update_view(session, "UPDATE t USING TTL 80 SET a = 5 WHERE k = 1", flush)
+        try:
+            assert_one(session, "SELECT * FROM t", [1, 5, 1])
+            assert_one(session, "SELECT * FROM mv", [1, 5, 1])
+        except AssertionError as ae:
+            if (time.time() - start) >= 80:
+                pytest.fail("Please increase the 80 TTL which expired before we could test due to a slow env.")
+            else:
+                raise ae
 
-        self.update_view(session, "UPDATE t USING TTL 30 SET a = 6 WHERE k = 1", flush)
-        assert_one(session, "SELECT * FROM t", [1, 6, 1])
-        assert_one(session, "SELECT * FROM mv", [1, 6, 1])
+        start = time.time()
+        self.update_view(session, "UPDATE t USING TTL 60 SET a = 6 WHERE k = 1", flush)
+        try:
+            assert_one(session, "SELECT * FROM t", [1, 6, 1])
+            assert_one(session, "SELECT * FROM mv", [1, 6, 1])
+        except AssertionError as ae:
+            if (time.time() - start) >= 60:
+                pytest.fail("Please increase the 60 TTL which expired before we could test due to a slow env.")
+            else:
+                raise ae
 
         if flush:
             self.cluster.compact()
-            assert_one(session, "SELECT * FROM t", [1, 6, 1])
-            assert_one(session, "SELECT * FROM mv", [1, 6, 1])
+            try:
+                assert_one(session, "SELECT * FROM t", [1, 6, 1])
+                assert_one(session, "SELECT * FROM mv", [1, 6, 1])
+            except AssertionError as ae:
+                if (time.time() - start) >= 60:
+                    pytest.fail("Please increase the 60 TTL which expired before we could test due to a slow env.")
+                else:
+                    raise ae
 
     @flaky
     @since('3.0')

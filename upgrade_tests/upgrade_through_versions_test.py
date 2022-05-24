@@ -15,7 +15,7 @@ from collections import defaultdict, namedtuple
 from multiprocessing import Process, Queue
 from queue import Empty, Full
 
-from cassandra import ConsistencyLevel, WriteTimeout
+from cassandra import ConsistencyLevel, WriteTimeout, DriverException
 from cassandra.query import SimpleStatement
 
 from dtest import RUN_STATIC_UPGRADE_MATRIX, Tester
@@ -77,6 +77,14 @@ def data_writer(tester, to_verify_queue, verification_done_queue, rewrite_probab
             session.execute(prepared, (val, key))
 
             to_verify_queue.put((key, val,))
+        except DriverException as dex:
+            if "ID mismatch while trying to reprepare" in str(dex):
+                time.sleep(1)  # Pstmnt id mismatch, retry. See CASSANDRA-15252/17140
+                continue
+            else:
+                logger.error("Error in data writer process!", dex)
+                shutdown_gently()
+                raise
         except Exception as ex:
             logger.error("Error in data writer process!", ex)
             shutdown_gently()
@@ -126,6 +134,14 @@ def data_checker(tester, to_verify_queue, verification_done_queue):
             time.sleep(1)  # let's not eat CPU if the queue is empty
             logger.info("to_verify_queue is empty: %d" % to_verify_queue.qsize())
             continue
+        except DriverException as dex:
+            if "ID mismatch while trying to reprepare" in str(dex):
+                time.sleep(1)  # Pstmnt id mismatch, retry. See CASSANDRA-15252/17140
+                continue
+            else:
+                logger.error("Error in data checker process!", dex)
+                shutdown_gently()
+                raise
         except Exception as ex:
             logger.error("Error in data checker process!", ex)
             shutdown_gently()
@@ -284,6 +300,8 @@ class TestUpgrade(Tester):
             r'Cannot update data center or rack from.*for live host',
             # Normal occurance. See CASSANDRA-12026. Likely won't be needed after C* 4.0.
             r'Unknown column cdc during deserialization',
+            # may occur during 2.2 check for existing roles
+            r'Got slice command for nonexistent table system_auth.roles',
         )
 
     def prepare(self):
@@ -369,7 +387,6 @@ class TestUpgrade(Tester):
                 self._create_schema()
         else:
             logger.debug("Skipping schema creation (should already be built)")
-        time.sleep(5)  # sigh...
 
         self._log_current_ver(self.test_version_metas[0])
 
@@ -530,6 +547,7 @@ class TestUpgrade(Tester):
                 c counter,
                 PRIMARY KEY (k1)
                 );""")
+        session.cluster.control_connection.wait_for_schema_agreement()
 
     def _create_schema(self):
         session = self.patient_cql_connection(self.node2, protocol_version=self.protocol_version)
@@ -547,6 +565,7 @@ class TestUpgrade(Tester):
                 c counter,
                 PRIMARY KEY (k1, k2)
                 );""")
+        session.cluster.control_connection.wait_for_schema_agreement()
 
     def _write_values(self, num=100):
         session = self.patient_cql_connection(self.node2, protocol_version=self.protocol_version)

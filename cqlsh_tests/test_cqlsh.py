@@ -1132,7 +1132,28 @@ CREATE TYPE test.address_type (
                 PRIMARY KEY (id, col)
                 """
 
-        if self.cluster.version() >= LooseVersion('4.0'):
+        if self.cluster.version() >= LooseVersion('4.1'):
+            create_table += """
+        ) WITH CLUSTERING ORDER BY (col ASC)
+            AND additional_write_policy = '99p'
+            AND bloom_filter_fp_chance = 0.01
+            AND caching = {'keys': 'ALL', 'rows_per_partition': 'NONE'}
+            AND cdc = false
+            AND comment = ''
+            AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', 'max_threshold': '32', 'min_threshold': '4'}
+            AND compression = {'chunk_length_in_kb': '16', 'class': 'org.apache.cassandra.io.compress.LZ4Compressor'}
+            AND memtable = 'default'
+            AND crc_check_chance = 1.0
+            AND default_time_to_live = 0
+            AND extensions = {}
+            AND gc_grace_seconds = 864000
+            AND max_index_interval = 2048
+            AND memtable_flush_period_in_ms = 0
+            AND min_index_interval = 128
+            AND read_repair = 'BLOCKING'
+            AND speculative_retry = '99p';
+        """
+        elif self.cluster.version() >= LooseVersion('4.0'):
             create_table += """
         ) WITH CLUSTERING ORDER BY (col ASC)
             AND additional_write_policy = '99p'
@@ -1218,7 +1239,32 @@ CREATE TYPE test.address_type (
         myindex_output = self.get_index_output('myindex', 'test', 'users', 'age')
         create_table = None
 
-        if self.cluster.version() >= LooseVersion('4.0'):
+        if self.cluster.version() >= LooseVersion('4.1'):
+            create_table = """
+        CREATE TABLE test.users (
+            userid text PRIMARY KEY,
+            age int,
+            firstname text,
+            lastname text
+        ) WITH additional_write_policy = '99p'
+            AND bloom_filter_fp_chance = 0.01
+            AND caching = {'keys': 'ALL', 'rows_per_partition': 'NONE'}
+            AND cdc = false
+            AND comment = ''
+            AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', 'max_threshold': '32', 'min_threshold': '4'}
+            AND compression = {'chunk_length_in_kb': '16', 'class': 'org.apache.cassandra.io.compress.LZ4Compressor'}
+            AND memtable = 'default'
+            AND crc_check_chance = 1.0
+            AND default_time_to_live = 0
+            AND extensions = {}
+            AND gc_grace_seconds = 864000
+            AND max_index_interval = 2048
+            AND memtable_flush_period_in_ms = 0
+            AND min_index_interval = 128
+            AND read_repair = 'BLOCKING'
+            AND speculative_retry = '99p';
+        """
+        elif self.cluster.version() >= LooseVersion('4.0'):
             create_table = """
         CREATE TABLE test.users (
             userid text PRIMARY KEY,
@@ -1324,7 +1370,32 @@ CREATE TYPE test.address_type (
         return "CREATE INDEX {} ON {}.{} ({});".format(index, ks, table, col)
 
     def get_users_by_state_mv_output(self):
-        if self.cluster.version() >= LooseVersion('4.0'):
+        if self.cluster.version() >= LooseVersion('4.1'):
+            return """
+                CREATE MATERIALIZED VIEW test.users_by_state AS
+                SELECT *
+                FROM test.users
+                WHERE state IS NOT NULL AND username IS NOT NULL
+                PRIMARY KEY (state, username)
+                WITH CLUSTERING ORDER BY (username ASC)
+                AND additional_write_policy = '99p'
+                AND bloom_filter_fp_chance = 0.01
+                AND caching = {'keys': 'ALL', 'rows_per_partition': 'NONE'}
+                AND cdc = false
+                AND comment = ''
+                AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', 'max_threshold': '32', 'min_threshold': '4'}
+                AND compression = {'chunk_length_in_kb': '16', 'class': 'org.apache.cassandra.io.compress.LZ4Compressor'}
+                AND memtable = 'default'
+                AND crc_check_chance = 1.0
+                AND extensions = {}
+                AND gc_grace_seconds = 864000
+                AND max_index_interval = 2048
+                AND memtable_flush_period_in_ms = 0
+                AND min_index_interval = 128
+                AND read_repair = 'BLOCKING'
+                AND speculative_retry = '99p';
+               """
+        elif self.cluster.version() >= LooseVersion('4.0'):
             return """
                 CREATE MATERIALIZED VIEW test.users_by_state AS
                 SELECT *
@@ -1341,7 +1412,6 @@ CREATE TYPE test.address_type (
                 AND compression = {'chunk_length_in_kb': '16', 'class': 'org.apache.cassandra.io.compress.LZ4Compressor'}
                 AND memtable = {}
                 AND crc_check_chance = 1.0
-                AND default_time_to_live = 0
                 AND extensions = {}
                 AND gc_grace_seconds = 864000
                 AND max_index_interval = 2048
@@ -2308,7 +2378,7 @@ Tracing session:""")
 
             with NamedTemporaryFile(mode='wt') as credentialsfile:
                 # Ensure the credentials file specified in the command line options is used
-                credentialsfile.write('[plain_text_auth]\nusername=cassandra\npassword=cassandra\n')
+                credentialsfile.write('[PlainTextAuthProvider]\nusername=cassandra\npassword=cassandra\n')
                 credentialsfile.flush()
                 os.chmod(credentialsfile.name, stat.S_IRUSR | stat.S_IWUSR)
                 cqlsh_options = ['--credentials', credentialsfile.name]

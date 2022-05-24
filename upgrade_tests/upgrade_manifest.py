@@ -25,10 +25,10 @@ CASSANDRA_2_1 = '2.1'
 CASSANDRA_2_2 = '2.2'
 CASSANDRA_3_0 = '3.0'
 CASSANDRA_3_11 = '3.11'
-CASSANDRA_4_0 = '4.0' # TODO remove when cassandra-4.0.0 is released (and that branch is removed)
-CASSANDRA_4_0_X = '4.0.1' # TODO rename to CASSANDRA_4_0 when cassandra-4.0.0 is released (and that branch is removed)
+CASSANDRA_4_0 = '4.0'
 CASSANDRA_4_1 = '4.1'
-TRUNK = CASSANDRA_4_1
+CASSANDRA_4_2 = '4.2'
+TRUNK = CASSANDRA_4_2
 
 def is_same_family_current_to_indev(origin, destination):
     """
@@ -97,14 +97,12 @@ def set_version_family():
         version_family = CASSANDRA_3_0
     elif current_version.vstring.startswith('3.11'):
         version_family = CASSANDRA_3_11
-    # TODO remove when cassandra-4.0.0 is released (and that branch is removed)
-    elif current_version.vstring.startswith('4.0.0') or current_version.vstring.startswith('4.0-'):
-        version_family = CASSANDRA_4_0
     elif current_version.vstring.startswith('4.0'):
-        # TODO rename to CASSANDRA_4_0 when cassandra-4.0.0 is released (and that branch is removed)
-        version_family = CASSANDRA_4_0_X
+        version_family = CASSANDRA_4_0
     elif current_version.vstring.startswith('4.1'):
         version_family = CASSANDRA_4_1
+    elif current_version.vstring.startswith('4.2'):
+        version_family = CASSANDRA_4_2
     else:
         # when this occurs, it's time to update this manifest a bit!
         raise RuntimeError("Testing upgrades from/to version %s is not supported. Please use a custom manifest (see upgrade_manifest.py)" % current_version.vstring)
@@ -159,17 +157,16 @@ indev_2_2_x = VersionMeta(name='indev_2_2_x', family=CASSANDRA_2_2, variant='ind
 current_2_2_x = VersionMeta(name='current_2_2_x', family=CASSANDRA_2_2, variant='current', version='2.2.19', min_proto_v=1, max_proto_v=3, java_versions=(7, 8))
 
 indev_3_0_x = VersionMeta(name='indev_3_0_x', family=CASSANDRA_3_0, variant='indev', version='github:apache/cassandra-3.0', min_proto_v=3, max_proto_v=4, java_versions=(8,))
-current_3_0_x = VersionMeta(name='current_3_0_x', family=CASSANDRA_3_0, variant='current', version='3.0.24', min_proto_v=3, max_proto_v=4, java_versions=(8,))
+current_3_0_x = VersionMeta(name='current_3_0_x', family=CASSANDRA_3_0, variant='current', version='3.0.26', min_proto_v=3, max_proto_v=4, java_versions=(8,))
 
 indev_3_11_x = VersionMeta(name='indev_3_11_x', family=CASSANDRA_3_11, variant='indev', version='github:apache/cassandra-3.11', min_proto_v=3, max_proto_v=4, java_versions=(8,))
-current_3_11_x = VersionMeta(name='current_3_11_x', family=CASSANDRA_3_11, variant='current', version='3.11.10', min_proto_v=3, max_proto_v=4, java_versions=(8,))
+current_3_11_x = VersionMeta(name='current_3_11_x', family=CASSANDRA_3_11, variant='current', version='3.11.12', min_proto_v=3, max_proto_v=4, java_versions=(8,))
 
-# TODO remove when cassandra-4.0.0 is released (and that branch is removed)
-indev_4_0_0 = VersionMeta(name='indev_4_0_0', family=CASSANDRA_4_0, variant='indev', version='github:apache/cassandra-4.0.0', min_proto_v=3, max_proto_v=4, java_versions=(8,))
-current_4_0_0 = VersionMeta(name='current_4_0_0', family=CASSANDRA_4_0, variant='current', version='4.0-rc2', min_proto_v=4, max_proto_v=5, java_versions=(8,))
+indev_4_0_x = VersionMeta(name='indev_4_0_x', family=CASSANDRA_4_0, variant='indev', version='github:apache/cassandra-4.0', min_proto_v=3, max_proto_v=4, java_versions=(8,))
+current_4_0_x = VersionMeta(name='current_4_0_x', family=CASSANDRA_4_0, variant='current', version='4.0.3', min_proto_v=4, max_proto_v=5, java_versions=(8,))
 
-indev_4_0_x = VersionMeta(name='indev_4_0_x', family=CASSANDRA_4_0_X, variant='indev', version='github:apache/cassandra-4.0', min_proto_v=3, max_proto_v=4, java_versions=(8,))
-current_4_0_x = VersionMeta(name='current_4_0_x', family=CASSANDRA_4_0_X, variant='current', version='4.0', min_proto_v=4, max_proto_v=5, java_versions=(8,))
+indev_4_1_x = VersionMeta(name='indev_4_1_x', family=CASSANDRA_4_1, variant='indev', version='github:apache/cassandra-4.1', min_proto_v=3, max_proto_v=4, java_versions=(8,))
+#current_4_1_x = VersionMeta(name='current_4_1_x', family=CASSANDRA_4_1, variant='current', version='4.1-alpha1', min_proto_v=4, max_proto_v=5, java_versions=(8,))
 
 indev_trunk = VersionMeta(name='indev_trunk', family=TRUNK, variant='indev', version='github:apache/trunk', min_proto_v=4, max_proto_v=5, java_versions=(8,))
 
@@ -185,14 +182,14 @@ indev_trunk = VersionMeta(name='indev_trunk', family=TRUNK, variant='indev', ver
 MANIFEST = {
     current_2_1_x: [indev_2_2_x, indev_3_0_x, indev_3_11_x],
     current_2_2_x: [indev_2_2_x, indev_3_0_x, indev_3_11_x],
-    current_3_0_x: [indev_3_0_x, indev_3_11_x, indev_4_0_x],
-    current_3_11_x: [indev_3_11_x, indev_4_0_x],
-    current_4_0_x: [indev_4_0_x, indev_trunk],
+    current_3_0_x: [indev_3_0_x, indev_3_11_x, indev_4_0_x, indev_4_1_x, indev_trunk],
+    current_3_11_x: [indev_3_11_x, indev_4_0_x, indev_4_1_x, indev_trunk],
+    current_4_0_x: [indev_4_0_x, indev_4_1_x, indev_trunk],
 
     indev_2_2_x: [indev_3_0_x, indev_3_11_x],
-    indev_3_0_x: [indev_3_11_x, indev_4_0_x],
-    indev_3_11_x: [indev_4_0_x],
-    indev_4_0_x: [indev_trunk]
+    indev_3_0_x: [indev_3_11_x, indev_4_0_x, indev_4_1_x, indev_trunk],
+    indev_3_11_x: [indev_4_0_x, indev_4_1_x, indev_trunk],
+    indev_4_0_x: [indev_4_1_x, indev_trunk]
 }
 
 def _have_common_proto(origin_meta, destination_meta):

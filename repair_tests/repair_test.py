@@ -709,6 +709,37 @@ class TestRepair(BaseRepairTest):
         else:
             assert len(node1.grep_log('parallelism=PARALLEL')) == 1, str(node1.grep_log('parallelism'))
 
+
+    @since('3.11')
+    def test_repair_validates_dc(self):
+        """
+        * Set up a multi DC cluster
+        * Perform a -dc repair with nonexistent dc and without local dc
+        * Assert that the repair is not trigger in both cases
+        """
+        cluster = self._setup_multi_dc()
+        node1 = cluster.nodes["node1"]
+        node2 = cluster.nodes["node2"]
+        node3 = cluster.nodes["node3"]
+
+        opts = ["-dc", "dc1", "-dc", "dc13"]
+        opts += _repair_options(self.cluster.version(), ks="ks", sequential=False)
+        # repair should fail because dc13 does not exist
+        try:
+            node1.repair(opts)
+        except Exception as e:
+            nodetool_error = e
+        assert 'data center(s) [dc13] not found' in repr(nodetool_error)
+
+        opts = ["-dc", "dc2", "-dc", "dc3"]
+        opts += _repair_options(self.cluster.version(), ks="ks", sequential=False)
+        # repair should fail because local dc not included in repair
+        try:
+            node1.repair(opts)
+        except Exception as e:
+            nodetool_error = e
+        assert 'the local data center must be part of the repair' in repr(nodetool_error)
+
     def _setup_multi_dc(self):
         """
         Sets up 3 DCs (2 nodes in 'dc1', and one each in 'dc2' and 'dc3').
@@ -727,11 +758,10 @@ class TestRepair(BaseRepairTest):
         node1, node2, node3, node4 = cluster.nodelist()
         session = self.patient_cql_connection(node1)
         session.execute("CREATE KEYSPACE ks WITH replication = {'class': 'NetworkTopologyStrategy', 'dc1': 2, 'dc2': 1, 'dc3':1}")
-        session.execute("USE ks")
         if cluster.version() < '4.0':
-            create_cf(session, 'cf', read_repair=0.0, columns={'c1': 'text', 'c2': 'text'})
+            create_cf(session, 'ks.cf', read_repair=0.0, columns={'c1': 'text', 'c2': 'text'})
         else:
-            create_cf(session, 'cf', columns={'c1': 'text', 'c2': 'text'})
+            create_cf(session, 'ks.cf', columns={'c1': 'text', 'c2': 'text'})
 
         # Insert 1000 keys, kill node 2, insert 1 key, restart node 2, insert 1000 more keys
         logger.debug("Inserting data...")
@@ -948,7 +978,7 @@ class TestRepair(BaseRepairTest):
         assert len(node.grep_log("in repair1 - unreplicated keyspace is ignored since repair was called with --ignore-unreplicated-keyspaces")) > 0
 
         try:
-            self.fixture_dtest_setup.ignore_log_patterns.append("Nothing to repair for .+ in repair1")
+            self.fixture_dtest_setup.ignore_log_patterns.append("Nothing to repair for .+ in .+")
             node.nodetool("repair -st 0 -et 1")
             assert False, "repair should fail"
         except ToolError:
@@ -1283,7 +1313,9 @@ class TestRepair(BaseRepairTest):
             "Repair session .* for range .* failed with error",
             "Sync failed between .* and .*",
             "failed to send a stream message/file to peer",
-            "failed to send a stream message/data to peer"
+            "failed to send a stream message/data to peer",
+            "Remote peer .* failed stream session",
+            "org.apache.cassandra.repair.SomeRepairFailedException: null"
         ]
 
         # stream session will be closed upon EOF, see CASSANDRA-15666
