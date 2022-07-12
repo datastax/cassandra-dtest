@@ -358,6 +358,7 @@ class TestReplaceAddress(BaseReplaceAddressTest):
             # completely delete the data, commitlog, and saved caches
             for d in chain([os.path.join(node3.get_path(), "commitlogs")],
                            [os.path.join(node3.get_path(), "saved_caches")],
+                           [os.path.join(node3.get_path(), "metadata")],
                            node3.data_directories()):
                 if os.path.exists(d):
                     rmtree(d)
@@ -391,6 +392,7 @@ class TestReplaceAddress(BaseReplaceAddressTest):
 
         for d in chain([os.path.join(node3.get_path(), "commitlogs")],
                        [os.path.join(node3.get_path(), "saved_caches")],
+                       [os.path.join(node3.get_path(), "metadata")],
                        node3.data_directories()):
             if os.path.exists(d):
                 rmtree(d)
@@ -436,7 +438,7 @@ class TestReplaceAddress(BaseReplaceAddressTest):
                 if os.path.exists(system_data):
                     rmtree(system_data)
 
-            for d in ['commitlogs', 'saved_caches']:
+            for d in ['commitlogs', 'saved_caches', 'metadata']:
                 p = os.path.join(self.replacement_node.get_path(), d)
                 if os.path.exists(p):
                     rmtree(p)
@@ -658,3 +660,7 @@ class TestReplaceAddress(BaseReplaceAddressTest):
             logger.debug("Deleting {}".format(data_dir))
             rmtree(data_dir)
         rmtree(commitlog_dir)
+        metadata_dir = os.path.join(node.get_path(), 'metadata')
+        if os.path.exists(metadata_dir):
+            rmtree(metadata_dir)
+
