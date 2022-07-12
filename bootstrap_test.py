@@ -735,13 +735,7 @@ class BootstrapTester(Tester):
         node2.stop(wait_other_notice=False)
 
         # Wipe its data
-        for data_dir in node2.data_directories():
-            logger.debug("Deleting {}".format(data_dir))
-            shutil.rmtree(data_dir)
-
-        commitlog_dir = os.path.join(node2.get_path(), 'commitlogs')
-        logger.debug("Deleting {}".format(commitlog_dir))
-        shutil.rmtree(commitlog_dir)
+        self._cleanup(node2)
 
         # Now start it, it should be allowed to join
         mark = node2.mark_log()
@@ -988,6 +982,11 @@ class BootstrapTester(Tester):
             logger.debug("Deleting {}".format(data_dir))
             shutil.rmtree(data_dir)
         shutil.rmtree(commitlog_dir)
+        metadata_dir = os.path.join(node.get_path(), 'metadata')
+        if os.path.exists(metadata_dir):
+            logger.debug("Deleting {}".format(metadata_dir))
+            shutil.rmtree(metadata_dir)
+
 
     @since('2.2')
     @pytest.mark.ported_to_in_jvm # see org.apache.cassandra.distributed.test.BootstrapBinaryDisabledTest
