@@ -79,11 +79,15 @@ class TestMaterializedViews(Tester):
 
     def update_view(self, session, query, flush, compact=False):
         session.execute(query)
+        query_time = time.time()
+
         self._replay_batchlogs()
         if flush:
             self.cluster.flush()
         if compact:
             self.cluster.compact()
+
+        return query_time
 
     def _settle_nodes(self):
         logger.debug("Settling all nodes")
@@ -342,6 +346,7 @@ class TestMaterializedViews(Tester):
         session = self.prepare(consistency_level=ConsistencyLevel.QUORUM)
 
         session.execute("CREATE TABLE t (id int, v int, PRIMARY KEY (id, v))")
+        session.cluster.control_connection.wait_for_schema_agreement()
 
         for i in range(5):
             for j in range(10000):
@@ -349,6 +354,7 @@ class TestMaterializedViews(Tester):
 
         session.execute(("CREATE MATERIALIZED VIEW t_by_v AS SELECT * FROM t WHERE v IS NOT NULL "
                          "AND id IS NOT NULL PRIMARY KEY (v, id)"))
+        session.cluster.control_connection.wait_for_schema_agreement()
 
         logger.debug("wait for view to build")
         self._wait_for_view("ks", "t_by_v")
@@ -1534,19 +1540,37 @@ class TestMaterializedViews(Tester):
         assert_one(session, "SELECT * FROM t", [1, 1, 1, None, None, None])
         assert_one(session, "SELECT * FROM mv", [1, 1, 1, None])
 
-        # add selected with ttl=20 (we apparently need a long ttl because the flushing etc that self.update_view does can take a long time)
-        self.update_view(session, "UPDATE t USING TTL 20 SET a=1 WHERE k=1 AND c=1;", flush)
-        assert_one(session, "SELECT * FROM t", [1, 1, 1, None, None, None])
-        assert_one(session, "SELECT * FROM mv", [1, 1, 1, None])
+        start = time.time()
+        # add selected with ttl=30 (we apparently need a long ttl because the flushing etc that self.update_view does can take a long time)
+        update_time = self.update_view(session, "UPDATE t USING TTL 30 SET a=1 WHERE k=1 AND c=1;", flush)
+        try:
+            assert_one(session, "SELECT * FROM t", [1, 1, 1, None, None, None])
+            assert_one(session, "SELECT * FROM mv", [1, 1, 1, None])
+        except AssertionError as ae:
+            if (time.time() - start) >= 30:
+                pytest.fail("Please increase the 30 TTL which expired before we could test due to a slow env.")
+            else:
+                raise ae
 
-        time.sleep(20)
+        wait_time = update_time + 30 - time.time()
+        if wait_time > 0:
+            time.sleep(wait_time)
 
-        # update unselected with ttl=10, view row should be alive
-        self.update_view(session, "UPDATE t USING TTL 20 SET f=1 WHERE k=1 AND c=1;", flush)
-        assert_one(session, "SELECT * FROM t", [1, 1, None, None, None, 1])
-        assert_one(session, "SELECT * FROM mv", [1, 1, None, None])
+        start = time.time()
+        # update unselected with ttl=30, view row should be alive
+        update_time = self.update_view(session, "UPDATE t USING TTL 30 SET f=1 WHERE k=1 AND c=1;", flush)
+        try:
+            assert_one(session, "SELECT * FROM t", [1, 1, None, None, None, 1])
+            assert_one(session, "SELECT * FROM mv", [1, 1, None, None])
+        except AssertionError as ae:
+            if (time.time() - start) >= 30:
+                pytest.fail("Please increase the 30 TTL which expired before we could test due to a slow env.")
+            else:
+                raise ae
 
-        time.sleep(20)
+        wait_time = update_time + 30 - time.time()
+        if wait_time > 0:
+            time.sleep(wait_time)
 
         # view row still alive due to base livenessInfo
         assert_none(session, "SELECT * FROM t")

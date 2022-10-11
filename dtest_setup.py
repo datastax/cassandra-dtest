@@ -47,7 +47,14 @@ def retry_till_success(fun, *args, **kwargs):
 def default_ignore_log_patterns():
     # to allow tests to append to the list, make sure to create a new list as the output
     # to this function, else multiple tests could corrupt the default set
-    return ['.*\[epollEventLoopGroup-.*\].*- Unknown exception in client networking.*: Connection reset by peer']
+    return ['failed: Connection reset by peer',
+            r'Invalid or unsupported protocol version \(5\)',
+            # See python-driver, SHA a7295e103023e12152fc0940906071b18356def3
+            # cassandra/__init__.py
+            r'Invalid or unsupported protocol version \(65\)',  # DSE_V1
+            r'Invalid or unsupported protocol version \(66\)',  # DSE_V2
+            'Beta version of the protocol used',
+            ]
 
 
 class DTestSetup(object):
@@ -76,6 +83,19 @@ class DTestSetup(object):
         self.jvm_args = []
         self.create_cluster_func = None
         self.iterations = 0
+
+    def install_nodetool_legacy_parsing(self):
+        """ Hack nodetool on old versions for legacy URL parsing, ala CASSANDRA-17581 """
+        if self.cluster.version() < LooseVersion('3.0'):
+            logger.debug("hacking nodetool for legacy parsing")
+            nodetool = os.path.join(self.cluster.get_install_dir(), 'bin', 'nodetool')
+            with open(nodetool, 'r+') as fd:
+                contents = fd.readlines()
+                contents.insert(len(contents)-5, "      -Dcom.sun.jndi.rmiURLParsing=legacy \\\n")
+                fd.seek(0)
+                fd.writelines(contents)
+        else:
+            logger.debug("not modifying nodetool on version {}".format(self.cluster.version()))
 
     def set_ignore_log_patterns(self, other):
         if self._ignore_log_patterns == None:
@@ -390,9 +410,9 @@ class DTestSetup(object):
             else:
                 raise e
 
-    def cleanup_cluster(self, request=None):
+    def cleanup_cluster(self, request=None, failure=False):
         with log_filter('cassandra'):  # quiet noise from driver when nodes start going down
-            test_failed = request and hasattr(request.node, 'rep_call') and request.node.rep_call.failed
+            test_failed = (request and hasattr(request.node, 'rep_call') and request.node.rep_call.failed) or failure
             if self.dtest_config.keep_test_dir or (self.dtest_config.keep_failed_test_dir and test_failed):
                 self.stop_cluster(gently=self.dtest_config.enable_jacoco_code_coverage)
             else:

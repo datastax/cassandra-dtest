@@ -62,6 +62,8 @@ class BaseReplaceAddressTest(Tester):
         if mixed_versions:
             logger.debug("Starting nodes on version 2.2.4")
             self.cluster.set_install_dir(version="2.2.4")
+            self.install_nodetool_legacy_parsing()
+
 
         self.cluster.start()
 
@@ -299,7 +301,7 @@ class TestReplaceAddress(BaseReplaceAddressTest):
     @pytest.mark.resource_intensive
     def test_replace_active_node(self):
         self.fixture_dtest_setup.ignore_log_patterns = list(self.fixture_dtest_setup.ignore_log_patterns) + [
-            r'Exception encountered during startup']
+            r'Exception encountered during startup', r'Unable to replace node for token']
 
         self._setup(n=3)
         self._do_replace(wait_for_binary_proto=False)
