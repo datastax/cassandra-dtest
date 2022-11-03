@@ -474,6 +474,7 @@ class TestOfflineTools(Tester):
                       "Class JavaLaunchHelper is implemented in both",
                       "Picked up JAVA_TOOL_OPTIONS:",
                       # Warnings for backward compatibility should be logged CASSANDRA-15234
+                      "Small commitlog volume detected",
                       "parameters have been deprecated. They have new names and/or value format"]
 
         if len(error) > 0:
