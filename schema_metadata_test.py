@@ -503,7 +503,7 @@ class TestSchemaMetadata(Tester):
         cluster = fixture_dtest_setup.cluster
         cluster.schema_event_refresh_window = 0
 
-        if cluster.version() >= '4.2':
+        if cluster.version() >= '4.0':
             cluster.set_configuration_options({'enable_user_defined_functions': 'true'})
         elif cluster.version() >= '3.0':
             cluster.set_configuration_options({'enable_user_defined_functions': 'true',
