@@ -107,7 +107,7 @@ class TestCqlsh(Tester, CqlshMixin):
     def fixture_dtest_setup_overrides(self, dtest_config):
         dtest_setup_overrides = DTestSetupOverrides()
 
-        if '3.0' <= dtest_config.cassandra_version_from_build < '4.2':
+        if '3.0' <= dtest_config.cassandra_version_from_build < '4.0':
             dtest_setup_overrides.cluster_options = ImmutableMapping({'enable_user_defined_functions': 'true',
                                                                       'enable_scripted_user_defined_functions': 'true'})
         else:
