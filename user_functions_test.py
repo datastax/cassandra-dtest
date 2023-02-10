@@ -24,7 +24,7 @@ class TestUserFunctions(Tester):
     def fixture_dtest_setup_overrides(self, dtest_config):
         dtest_setup_overrides = DTestSetupOverrides()
 
-        if '3.0' <= dtest_config.cassandra_version_from_build < '4.2':
+        if '3.0' <= dtest_config.cassandra_version_from_build < '4.0':
             dtest_setup_overrides.cluster_options = ImmutableMapping({'enable_user_defined_functions': 'true',
                                                                       'enable_scripted_user_defined_functions': 'true'})
         else:
@@ -147,7 +147,7 @@ class TestUserFunctions(Tester):
         session.execute("CREATE OR REPLACE FUNCTION overloaded(v ascii) called on null input RETURNS text LANGUAGE java AS 'return \"f1\";'")
 
         # ensure that works with correct specificity
-        if self.cluster.version() < LooseVersion('4.1'):
+        if self.cluster.version() < LooseVersion('4.0'):
             assert_invalid(session, "SELECT v FROM tab WHERE k = overloaded('foo')")
         else:
             assert_none(session, "SELECT v FROM tab WHERE k = overloaded('foo')")
@@ -170,7 +170,7 @@ class TestUserFunctions(Tester):
         # should now work - unambiguous
         session.execute("DROP FUNCTION overloaded")
 
-    @since('3.0', max_version='4.1.x')
+    @since('3.0', max_version='4.0.x')
     def test_udf_scripting(self):
         session = self.prepare()
         session.execute("create table nums (key int primary key, val double);")
@@ -211,7 +211,7 @@ class TestUserFunctions(Tester):
         assert_one(session, "SELECT avg(val) FROM nums", [5.0])
         assert_one(session, "SELECT count(*) FROM nums", [9])
 
-        if self.cluster.version() < LooseVersion('4.2'):
+        if self.cluster.version() < LooseVersion('4.0'):
             session.execute("create function test(a int, b double) called on null input returns int language javascript as 'a + b;'")
         else:
             session.execute("create function test(a int, b double) called on null input returns int language java as 'return a + Integer.valueOf(b.intValue());'")
