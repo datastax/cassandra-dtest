@@ -528,7 +528,8 @@ class TestUpgrade(Tester):
             logger.debug("Set new cassandra dir for %s: %s" % (node.name, node.get_install_dir()))
             if internode_ssl and (LooseVersion(version_meta.family) >= CASSANDRA_4_0):
                 node.set_configuration_options({'server_encryption_options': {'enabled': True, 'enable_legacy_ssl_storage_port': True}})
-            if LooseVersion(version_meta.family) >= CASSANDRA_5_0:
+
+            if LooseVersion(version_meta.family) >= CASSANDRA_4_0:
                 # only clusters starting from <5.0 will have enable_scripted_user_defined_functions=true
                 node.set_configuration_options({'enable_scripted_user_defined_functions': 'false'})
 
@@ -781,7 +782,7 @@ class BootstrapMixin(object):
         logger.debug("Adding a node to the cluster")
         nnode = new_node(self.cluster, remote_debug_port=str(2000 + len(self.cluster.nodes)))
 
-        if nnode.get_cassandra_version() >= '4.2':
+        if nnode.get_cassandra_version() >= '4.0':
             nnode.set_configuration_options({'enable_scripted_user_defined_functions': 'false'})
 
         nnode.start(use_jna=True, wait_other_notice=240, wait_for_binary_proto=True)
@@ -795,7 +796,7 @@ class BootstrapMixin(object):
         logger.debug("Adding a node to the cluster")
         nnode = new_node(self.cluster, remote_debug_port=str(2000 + len(self.cluster.nodes)), data_center='dc2')
 
-        if nnode.get_cassandra_version() >= '4.2':
+        if nnode.get_cassandra_version() >= '4.0':
             nnode.set_configuration_options({'enable_scripted_user_defined_functions': 'false'})
 
         nnode.start(use_jna=True, wait_other_notice=240, wait_for_binary_proto=True)
