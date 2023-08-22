@@ -1,12 +1,11 @@
+import conftest
 import logging
+import os
 
 from collections import namedtuple
 
-from dtest import RUN_STATIC_UPGRADE_MATRIX
-from conftest import cassandra_dir_and_version
-
 import ccmlib.repository
-from ccmlib.common import get_version_from_build
+from ccmlib.common import get_version_from_build, get_jdk_version_int
 
 from enum import Enum
 
@@ -27,8 +26,12 @@ CASSANDRA_3_0 = '3.0'
 CASSANDRA_3_11 = '3.11'
 CASSANDRA_4_0 = '4.0'
 CASSANDRA_4_1 = '4.1'
-CASSANDRA_4_2 = '4.2'
-TRUNK = CASSANDRA_4_2
+CASSANDRA_5_0 = '5.0'
+CASSANDRA_5_1 = '5.1'
+TRUNK = CASSANDRA_5_1
+
+RUN_STATIC_UPGRADE_MATRIX = os.environ.get('RUN_STATIC_UPGRADE_MATRIX', '').lower() in ('yes', 'true')
+
 
 def is_same_family_current_to_indev(origin, destination):
     """
@@ -51,7 +54,7 @@ class VersionSelectionStrategies(Enum):
     """
     INDEV=(lambda origin, destination: origin.variant == 'indev' and destination.variant == 'indev' or is_same_family_current_to_indev(origin, destination),)
     """
-    Test upgrading from releases to the latest release as well as from the current release to the indev tip 
+    Test upgrading from releases to the latest release as well as from the current release to the indev tip
     within the same version.
     """
     RELEASES=(lambda origin, destination: not VersionSelectionStrategies.INDEV.value[0](origin, destination) or is_same_family_current_to_indev(origin, destination),)
@@ -101,8 +104,10 @@ def set_version_family():
         version_family = CASSANDRA_4_0
     elif current_version.vstring.startswith('4.1'):
         version_family = CASSANDRA_4_1
-    elif current_version.vstring.startswith('4.2'):
-        version_family = CASSANDRA_4_2
+    elif current_version.vstring.startswith('5.0'):
+        version_family = CASSANDRA_5_0
+    elif current_version.vstring.startswith('5.1'):
+        version_family = CASSANDRA_5_1
     else:
         # when this occurs, it's time to update this manifest a bit!
         raise RuntimeError("Testing upgrades from/to version %s is not supported. Please use a custom manifest (see upgrade_manifest.py)" % current_version.vstring)
@@ -143,13 +148,14 @@ class VersionMeta(namedtuple('_VersionMeta', ('name', 'family', 'variant', 'vers
         """
         Returns a new object cloned from this one, with the version replaced with the local env version.
         """
-        cassandra_dir, cassandra_version = cassandra_dir_and_version(CONFIG)
+        cassandra_dir, cassandra_version = conftest.cassandra_dir_and_version(CONFIG)
         if cassandra_version:
             return self._replace(version=cassandra_version)
         return self._replace(version="clone:{}".format(cassandra_dir))
 
 
 # TODO define new versions whenever Cassandra is branched
+
 indev_2_1_x = VersionMeta(name='indev_2_1_x', family=CASSANDRA_2_1, variant='indev', version='github:apache/cassandra-2.1', min_proto_v=1, max_proto_v=3, java_versions=(7, 8))
 current_2_1_x = VersionMeta(name='current_2_1_x', family=CASSANDRA_2_1, variant='current', version='2.1.22', min_proto_v=1, max_proto_v=3, java_versions=(7, 8))
 
@@ -157,18 +163,23 @@ indev_2_2_x = VersionMeta(name='indev_2_2_x', family=CASSANDRA_2_2, variant='ind
 current_2_2_x = VersionMeta(name='current_2_2_x', family=CASSANDRA_2_2, variant='current', version='2.2.19', min_proto_v=1, max_proto_v=3, java_versions=(7, 8))
 
 indev_3_0_x = VersionMeta(name='indev_3_0_x', family=CASSANDRA_3_0, variant='indev', version='github:apache/cassandra-3.0', min_proto_v=3, max_proto_v=4, java_versions=(8,))
-current_3_0_x = VersionMeta(name='current_3_0_x', family=CASSANDRA_3_0, variant='current', version='3.0.27', min_proto_v=3, max_proto_v=4, java_versions=(8,))
+current_3_0_x = VersionMeta(name='current_3_0_x', family=CASSANDRA_3_0, variant='current', version='3.0.29', min_proto_v=3, max_proto_v=4, java_versions=(8,))
 
 indev_3_11_x = VersionMeta(name='indev_3_11_x', family=CASSANDRA_3_11, variant='indev', version='github:apache/cassandra-3.11', min_proto_v=3, max_proto_v=4, java_versions=(8,))
-current_3_11_x = VersionMeta(name='current_3_11_x', family=CASSANDRA_3_11, variant='current', version='3.11.13', min_proto_v=3, max_proto_v=4, java_versions=(8,))
+current_3_11_x = VersionMeta(name='current_3_11_x', family=CASSANDRA_3_11, variant='current', version='3.11.16', min_proto_v=3, max_proto_v=4, java_versions=(8,))
 
-indev_4_0_x = VersionMeta(name='indev_4_0_x', family=CASSANDRA_4_0, variant='indev', version='github:apache/cassandra-4.0', min_proto_v=3, max_proto_v=4, java_versions=(8,))
-current_4_0_x = VersionMeta(name='current_4_0_x', family=CASSANDRA_4_0, variant='current', version='4.0.4', min_proto_v=4, max_proto_v=5, java_versions=(8,))
+indev_4_0_x = VersionMeta(name='indev_4_0_x', family=CASSANDRA_4_0, variant='indev', version='github:apache/cassandra-4.0', min_proto_v=3, max_proto_v=4, java_versions=(8,11))
+current_4_0_x = VersionMeta(name='current_4_0_x', family=CASSANDRA_4_0, variant='current', version='4.0.11', min_proto_v=4, max_proto_v=5, java_versions=(8,11))
 
-indev_4_1_x = VersionMeta(name='indev_4_1_x', family=CASSANDRA_4_1, variant='indev', version='github:apache/cassandra-4.1', min_proto_v=4, max_proto_v=5, java_versions=(8,))
-#current_4_1_x = VersionMeta(name='current_4_1_x', family=CASSANDRA_4_1, variant='current', version='4.1-alpha1', min_proto_v=4, max_proto_v=5, java_versions=(8,))
+indev_4_1_x = VersionMeta(name='indev_4_1_x', family=CASSANDRA_4_1, variant='indev', version='github:apache/cassandra-4.1', min_proto_v=4, max_proto_v=5, java_versions=(8,11))
+current_4_1_x = VersionMeta(name='current_4_1_x', family=CASSANDRA_4_1, variant='current', version='4.1.3', min_proto_v=4, max_proto_v=5, java_versions=(8,11))
 
-indev_trunk = VersionMeta(name='indev_trunk', family=TRUNK, variant='indev', version='github:apache/trunk', min_proto_v=4, max_proto_v=5, java_versions=(8,))
+indev_5_0_x = VersionMeta(name='indev_5_0_x', family=CASSANDRA_5_0, variant='indev', version='github:apache/cassandra-5.0', min_proto_v=4, max_proto_v=5, java_versions=(11,17))
+# uncomment when 5.0-alpha1 is released
+#current_5_0_x = VersionMeta(name='current_5_0_x', family=CASSANDRA_5_0, variant='current', version='5.0-alpha1', min_proto_v=4, max_proto_v=5, java_versions=(11,17))
+
+indev_trunk = VersionMeta(name='indev_trunk', family=TRUNK, variant='indev', version='github:apache/trunk', min_proto_v=4, max_proto_v=5, java_versions=(11,17))
+# current_5_1_x = VersionMeta(name='current_5_1_x', family=CASSANDRA_5_1, variant='current', version='5.1-alpha1', min_proto_v=4, max_proto_v=5, java_versions=(11,17))
 
 
 # MANIFEST maps a VersionMeta representing a line/variant to a list of other VersionMeta's representing supported upgrades
@@ -182,15 +193,20 @@ indev_trunk = VersionMeta(name='indev_trunk', family=TRUNK, variant='indev', ver
 MANIFEST = {
     current_2_1_x: [indev_2_2_x, indev_3_0_x, indev_3_11_x],
     current_2_2_x: [indev_2_2_x, indev_3_0_x, indev_3_11_x],
-    current_3_0_x: [indev_3_0_x, indev_3_11_x, indev_4_0_x, indev_4_1_x, indev_trunk],
-    current_3_11_x: [indev_3_11_x, indev_4_0_x, indev_4_1_x, indev_trunk],
-    current_4_0_x: [indev_4_0_x, indev_4_1_x, indev_trunk],
+    current_3_0_x: [indev_3_0_x, indev_3_11_x, indev_4_0_x, indev_4_1_x],
+    current_3_11_x: [indev_3_11_x, indev_4_0_x, indev_4_1_x],
+    current_4_0_x:  [indev_4_0_x, indev_4_1_x, indev_5_0_x, indev_trunk],
+    current_4_1_x:  [indev_4_1_x, indev_5_0_x, indev_trunk],
+    # uncomment when 5.0-alpha1 is released
+    #current_5_0_x:  [indev_5_0_x, indev_trunk],
 
+    indev_2_1_x: [indev_2_2_x, indev_3_0_x, indev_3_11_x],
     indev_2_2_x: [indev_3_0_x, indev_3_11_x],
-    indev_3_0_x: [indev_3_11_x, indev_4_0_x, indev_4_1_x, indev_trunk],
-    indev_3_11_x: [indev_4_0_x, indev_4_1_x, indev_trunk],
-    indev_4_0_x: [indev_4_1_x, indev_trunk],
-    indev_4_1_x: [indev_trunk]
+    indev_3_0_x: [indev_3_11_x, indev_4_0_x, indev_4_1_x],
+    indev_3_11_x: [indev_4_0_x, indev_4_1_x],
+    indev_4_0_x:  [indev_4_1_x, indev_5_0_x, indev_trunk],
+    indev_4_1_x:  [indev_5_0_x, indev_trunk],
+    indev_5_0_x:  [indev_trunk]
 }
 
 def _have_common_proto(origin_meta, destination_meta):
@@ -199,6 +215,35 @@ def _have_common_proto(origin_meta, destination_meta):
     Returns a boolean indicating if the given VersionMetas have a common protocol version.
     """
     return origin_meta.max_proto_v >= destination_meta.min_proto_v
+
+def current_env_java_version():
+    # $JAVA_HOME/bin/java takes precedence over any java found in $PATH
+    if 'JAVA_HOME' in os.environ:
+        java_command = os.path.join(os.environ['JAVA_HOME'], 'bin', 'java')
+    else:
+        java_command = 'java'
+
+    return get_jdk_version_int(java_command)
+
+CURRENT_JAVA_VERSION = current_env_java_version()
+
+def jdk_compatible_steps(version_metas):
+    metas = []
+    for version_meta in version_metas:
+        # if you want multi-step upgrades to work with versions that require different jdks
+        #   then define the JAVA<jdk_version>_HOME vars (e.g. JAVA8_HOME)
+        #   ccm detects these variables and changes the jdk when starting/upgrading the node
+        # otherwise the default behaviour is to only do upgrade steps that work with the current jdk
+        javan_home_defined = False
+        for meta_java_version in version_meta.java_versions:
+            javan_home_defined |= 'JAVA{}_HOME'.format(meta_java_version) in os.environ
+        if CURRENT_JAVA_VERSION in version_meta.java_versions or javan_home_defined:
+            metas.append(version_meta)
+        else:
+            logger.info("Skipping version {} because it requires JDK {}. Current JDK is {} and none of {} env variables are defined."
+                        .format(version_meta.version, version_meta.java_versions, CURRENT_JAVA_VERSION, ["JAVA{}_HOME".format(v) for v in version_meta.java_versions]))
+
+    return metas
 
 def build_upgrade_pairs():
     """
@@ -242,14 +287,15 @@ def build_upgrade_pairs():
                     logger.debug("{} appears applicable to current env. Overriding final test version from {} to {}".format(path_name, oldmeta.version, newmeta.version))
                     destination_meta = newmeta
 
-            valid_upgrade_pairs.append(
-                UpgradePath(
-                    name=path_name,
-                    starting_version=origin_meta.version,
-                    upgrade_version=destination_meta.version,
-                    starting_meta=origin_meta,
-                    upgrade_meta=destination_meta
+            if len(jdk_compatible_steps([origin_meta, destination_meta])) > 1:
+                valid_upgrade_pairs.append(
+                    UpgradePath(
+                        name=path_name,
+                        starting_version=origin_meta.version,
+                        upgrade_version=destination_meta.version,
+                        starting_meta=origin_meta,
+                        upgrade_meta=destination_meta
+                    )
                 )
-            )
 
     return valid_upgrade_pairs

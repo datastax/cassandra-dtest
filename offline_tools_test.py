@@ -78,7 +78,7 @@ class TestOfflineTools(Tester):
         node1.stress(['write', 'n=50K', 'no-warmup', '-schema', 'replication(factor=1)',
                       '-rate', 'threads=8'])
         cluster.flush()
-        self.wait_for_compactions(node1)
+        node1.wait_for_compactions()
         cluster.stop()
 
         initial_levels = self.get_levels(node1.run_sstablemetadata(keyspace="keyspace1", column_families=["standard1"]))
@@ -102,13 +102,6 @@ class TestOfflineTools(Tester):
     def get_levels(self, data):
         (out, err, rc) = data
         return list(map(int, re.findall("SSTable Level: ([0-9])", out)))
-
-    def wait_for_compactions(self, node):
-        pattern = re.compile("pending tasks: 0")
-        while True:
-            output, err, _ = node.nodetool("compactionstats")
-            if pattern.search(output):
-                break
 
     def test_sstableofflinerelevel(self):
         """
@@ -178,7 +171,7 @@ class TestOfflineTools(Tester):
 
         node1.flush()
         logger.debug("Waiting for compactions to finish")
-        self.wait_for_compactions(node1)
+        node1.wait_for_compactions()
         logger.debug("Stopping node")
         cluster.stop()
         logger.debug("Done stopping node")
@@ -311,7 +304,11 @@ class TestOfflineTools(Tester):
             (out, error, rc) = node1.run_sstableverify("keyspace1", "standard1", options=options)
             assert False, "sstable verify did not fail; rc={}\nout={}\nerr={}".format(str(rc), out, error)
         except ToolError as e:
-            m = re.match("(?ms).*Corrupted SSTable : (?P<sstable>\S+)", str(e))
+            m = None
+            if cluster.version() >= '4.2':
+                m = re.match("(?ms).*Corrupted file: integrity check .* failed for (?P<sstable>\S+?):.*", str(e))
+            else:
+                m = re.match("(?ms).*Corrupted SSTable : (?P<sstable>\S+)", str(e))
             assert m is not None, str(e)
             # MacOS might use the "private" prefix.
             assert os.path.normcase(m.group('sstable')).replace("/private/var/folders", "/var/folders") == sstable1
@@ -362,12 +359,10 @@ class TestOfflineTools(Tester):
         elif testversion < '3.0':
             logger.debug('Test version: {} - installing github:apache/cassandra-2.1'.format(testversion))
             cluster.set_install_dir(version='github:apache/cassandra-2.1')
-            self.install_nodetool_legacy_parsing()
         # As of 3.5, sstable format 'ma' from 3.0 is still the latest - install 2.2 to upgrade from
         elif testversion < '4.0':
             logger.debug('Test version: {} - installing github:apache/cassandra-2.2'.format(testversion))
             cluster.set_install_dir(version='github:apache/cassandra-2.2')
-            self.install_nodetool_legacy_parsing()
         # From 4.0, one can only upgrade from 3.0
         else:
             logger.debug('Test version: {} - installing github:apache/cassandra-3.0'.format(testversion))
@@ -375,6 +370,7 @@ class TestOfflineTools(Tester):
 
         # Start up last major version, write out an sstable to upgrade, and stop node
         cluster.populate(1).start()
+        self.install_nodetool_legacy_parsing()
         [node1] = cluster.nodelist()
         # Check that node1 is actually what we expect
         logger.debug('Downgraded install dir: {}'.format(node1.get_install_dir()))
@@ -392,6 +388,7 @@ class TestOfflineTools(Tester):
         logger.debug('Upgraded to original install dir: {}'.format(node1.get_install_dir()))
         # Perform a node start/stop so system tables get internally updated, otherwise we may get "Unknown keyspace/table ks.cf"
         cluster.start()
+        self.install_nodetool_legacy_parsing()
         node1.flush()
         cluster.stop()
 

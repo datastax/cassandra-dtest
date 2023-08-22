@@ -14,6 +14,8 @@ from dtest import Tester
 since = pytest.mark.since
 logger = logging.getLogger(__name__)
 
+JVM_ARGS = ['-Dchronicle.queue.synchronousFileShrinking=true']
+
 @since('4.0')
 class TestAuditlog(Tester):
     def test_archiving(self):
@@ -24,7 +26,7 @@ class TestAuditlog(Tester):
                                                                             'audit_logs_dir': log_dir,
                                                                             'roll_cycle': 'TEST_SECONDLY',
                                                                             'archive_command':'%s %%path'%(move_script)}})
-        cluster.populate(1).start()
+        cluster.populate(1).start(jvm_args=JVM_ARGS)
         node = cluster.nodelist()[0]
         node.stress(['write', 'n=100k', "no-warmup", "cl=ONE", "-rate", "threads=300"])
         node.nodetool("disableauditlog")
@@ -37,8 +39,9 @@ class TestAuditlog(Tester):
         log_dir = tempfile.mkdtemp('logs')
         moved_log_dir, move_script = self._create_script()
         cluster.set_configuration_options(values={'full_query_logging_options': {'log_dir': log_dir,
-                                                                                 'archive_command': 'conf should not be used'}})
-        cluster.populate(1).start()
+                                                                                 'archive_command': 'conf should not be used',
+                                                                                 'allow_nodetool_archive_command':'true'}})
+        cluster.populate(1).start(jvm_args=JVM_ARGS)
         node = cluster.nodelist()[0]
         node.nodetool("enablefullquerylog --archive-command \"%s %%path\" --roll-cycle=TEST_SECONDLY"%move_script)
         node.stress(['write', 'n=100k', "no-warmup", "cl=ONE", "-rate", "threads=300"])
@@ -58,7 +61,7 @@ class TestAuditlog(Tester):
         cluster.set_configuration_options(values={'full_query_logging_options': {'log_dir': log_dir,
                                                                                  'roll_cycle': 'TEST_SECONDLY',
                                                                                  'archive_command':'%s %%path'%(move_script)}})
-        cluster.populate(1).start()
+        cluster.populate(1).start(jvm_args=JVM_ARGS)
         node = cluster.nodelist()[0]
         node.nodetool("enablefullquerylog")
         node.stress(['write', 'n=100k', "no-warmup", "cl=ONE", "-rate", "threads=300"])
@@ -77,7 +80,13 @@ class TestAuditlog(Tester):
         moved_log_dir, move_script = self._create_script()
         files = []
         for i in range(10):
-            (_, fakelogfile) = tempfile.mkstemp(dir=log_dir, suffix='.cq4')
+            (fd, fakelogfile) = tempfile.mkstemp(dir=log_dir, suffix='.cq4')
+            # empty cq4 files are deleted as part of CASSANDRA-17933 so we write some fake content into them
+            # for the sake of having them archived on startup and not deleted
+            try:
+                os.write(fd, str.encode("somecontent"))
+            finally:
+                os.close(fd)
             files.append(fakelogfile)
         for f in files:
             assert os.path.isfile(f)
@@ -87,7 +96,7 @@ class TestAuditlog(Tester):
         cluster.set_configuration_options(values={'full_query_logging_options': {'log_dir': log_dir,
                                                                                  'roll_cycle': 'TEST_SECONDLY',
                                                                                  'archive_command':'%s %%path'%(move_script)}})
-        cluster.populate(1).start()
+        cluster.populate(1).start(jvm_args=JVM_ARGS)
         node = cluster.nodelist()[0]
         node.nodetool("enablefullquerylog")
 
@@ -104,7 +113,7 @@ class TestAuditlog(Tester):
         cluster.set_configuration_options(values={'full_query_logging_options': {'log_dir': log_dir,
                                                                                  'roll_cycle': 'TEST_SECONDLY',
                                                                                  'archive_command':'%s %%path'%(move_script)}})
-        cluster.populate(1).start()
+        cluster.populate(1).start(jvm_args=JVM_ARGS)
         node = cluster.nodelist()[0]
         node.nodetool("enablefullquerylog")
 

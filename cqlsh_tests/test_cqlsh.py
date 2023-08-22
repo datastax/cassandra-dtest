@@ -107,7 +107,7 @@ class TestCqlsh(Tester, CqlshMixin):
     def fixture_dtest_setup_overrides(self, dtest_config):
         dtest_setup_overrides = DTestSetupOverrides()
 
-        if dtest_config.cassandra_version_from_build >= '3.0':
+        if '3.0' <= dtest_config.cassandra_version_from_build < '4.2':
             dtest_setup_overrides.cluster_options = ImmutableMapping({'enable_user_defined_functions': 'true',
                                                                       'enable_scripted_user_defined_functions': 'true'})
         else:
@@ -785,7 +785,21 @@ VALUES (4, blobAsInt(0x), '', blobAsBigint(0x), 0x, blobAsBoolean(0x), blobAsDec
 (2 rows)
 """)
 
-        if self.cluster.version() >= LooseVersion('2.2'):
+        if self.cluster.version() >= LooseVersion('5.0'):
+            self.verify_output("LIST ALL PERMISSIONS OF user1", node1, """
+ role  | username | resource      | permission
+-------+----------+---------------+---------------
+ user1 |    user1 | <table ks.t1> |         ALTER
+ user1 |    user1 | <table ks.t1> |          DROP
+ user1 |    user1 | <table ks.t1> |        SELECT
+ user1 |    user1 | <table ks.t1> |        MODIFY
+ user1 |    user1 | <table ks.t1> |     AUTHORIZE
+ user1 |    user1 | <table ks.t1> |        UNMASK
+ user1 |    user1 | <table ks.t1> | SELECT_MASKED
+
+(7 rows)
+""")
+        elif self.cluster.version() >= LooseVersion('2.2'):
             self.verify_output("LIST ALL PERMISSIONS OF user1", node1, """
  role  | username | resource      | permission
 -------+----------+---------------+------------
@@ -1148,6 +1162,7 @@ CREATE TYPE test.address_type (
             AND default_time_to_live = 0
             AND extensions = {}
             AND gc_grace_seconds = 864000
+            AND incremental_backups = true
             AND max_index_interval = 2048
             AND memtable_flush_period_in_ms = 0
             AND min_index_interval = 128
@@ -1281,6 +1296,7 @@ CREATE TYPE test.address_type (
             AND default_time_to_live = 0
             AND extensions = {}
             AND gc_grace_seconds = 864000
+            AND incremental_backups = true
             AND max_index_interval = 2048
             AND memtable_flush_period_in_ms = 0
             AND min_index_interval = 128
@@ -1439,6 +1455,7 @@ CREATE TYPE test.address_type (
                 AND crc_check_chance = 1.0
                 AND extensions = {}
                 AND gc_grace_seconds = 864000
+                AND incremental_backups = true
                 AND max_index_interval = 2048
                 AND memtable_flush_period_in_ms = 0
                 AND min_index_interval = 128
@@ -2614,6 +2631,13 @@ class TestCqlshSmoke(Tester, CqlshMixin):
         # make sure everything inserted is actually there
         assert_all(self.session, 'SELECT key FROM ks.test',
                    [['eggs'], ['spam'], ['sausage']])
+
+    def test_copy_stdout(self):
+        """
+        Smoke test COPY ... TO STDOUT
+        CASSANDRA-12497, CASSANDRA-18353
+        """
+        self.node1.run_cqlsh("COPY system.local(cluster_name) TO STDOUT")
 
     def test_create_keyspace(self):
         assert 'created' not in self.get_keyspace_names()

@@ -96,7 +96,7 @@ class BaseRepairTest(Tester):
         # Disable hinted handoff and set batch commit log so this doesn't
         # interfere with the test (this must be after the populate)
         cluster.set_configuration_options(values={'hinted_handoff_enabled': False})
-        cluster.set_batch_commitlog(enabled=True)
+        cluster.set_batch_commitlog(enabled=True, use_batch_window = cluster.version() < '5.0')
         logger.debug("Starting cluster..")
         cluster.populate(3).start()
         node1, node2, node3 = cluster.nodelist()
@@ -111,6 +111,7 @@ class BaseRepairTest(Tester):
         # Insert 1000 keys, kill node 3, insert 1 key, restart node 3, insert 1000 more keys
         logger.debug("Inserting data...")
         insert_c1c2(session, n=1000, consistency=ConsistencyLevel.ALL, ks='ks')
+        self.install_legacy_parsing(node3)
         node3.flush()
         node3.stop(wait_other_notice=True)
         insert_c1c2(session, keys=(1000, ), consistency=ConsistencyLevel.TWO, ks='ks')
@@ -463,7 +464,7 @@ class TestRepair(BaseRepairTest):
         cluster = self.cluster
         cluster.populate(2)
         cluster.set_configuration_options(values={'hinted_handoff_enabled': False})
-        cluster.set_batch_commitlog(enabled=True)
+        cluster.set_batch_commitlog(enabled=True, use_batch_window = cluster.version() < '5.0')
         cluster.start()
         node1, node2 = cluster.nodelist()
 
@@ -588,7 +589,7 @@ class TestRepair(BaseRepairTest):
         cluster = self.cluster
         cluster.populate(2)
         cluster.set_configuration_options(values={'hinted_handoff_enabled': False})
-        cluster.set_batch_commitlog(enabled=True)
+        cluster.set_batch_commitlog(enabled=True, use_batch_window = cluster.version() < '5.0')
         cluster.start()
         node1, node2 = cluster.nodelist()
 
@@ -750,7 +751,7 @@ class TestRepair(BaseRepairTest):
         # Disable hinted handoff and set batch commit log so this doesn't
         # interfer with the test (this must be after the populate)
         cluster.set_configuration_options(values={'hinted_handoff_enabled': False})
-        cluster.set_batch_commitlog(enabled=True)
+        cluster.set_batch_commitlog(enabled=True, use_batch_window = cluster.version() < '5.0')
         logger.debug("Starting cluster..")
         # populate 2 nodes in dc1, and one node each in dc2 and dc3
         cluster.populate([2, 1, 1]).start()
@@ -836,7 +837,7 @@ class TestRepair(BaseRepairTest):
         """
         cluster = self.cluster
         cluster.set_configuration_options(values={'hinted_handoff_enabled': False})
-        cluster.set_batch_commitlog(enabled=True)
+        cluster.set_batch_commitlog(enabled=True, use_batch_window = cluster.version() < '5.0')
         logger.debug("Starting cluster..")
         cluster.populate(3).start()
 
@@ -860,7 +861,7 @@ class TestRepair(BaseRepairTest):
         """
         cluster = self.cluster
         cluster.set_configuration_options(values={'hinted_handoff_enabled': False})
-        cluster.set_batch_commitlog(enabled=True)
+        cluster.set_batch_commitlog(enabled=True, use_batch_window = cluster.version() < '5.0')
         logger.debug("Starting cluster..")
         cluster.populate(3).start()
 
@@ -909,7 +910,7 @@ class TestRepair(BaseRepairTest):
         """
         cluster = self.cluster
         cluster.set_configuration_options(values={'hinted_handoff_enabled': False})
-        cluster.set_batch_commitlog(enabled=True)
+        cluster.set_batch_commitlog(enabled=True, use_batch_window = cluster.version() < '5.0')
         logger.debug("Starting cluster..")
         cluster.populate(3).start()
 
@@ -933,7 +934,7 @@ class TestRepair(BaseRepairTest):
         """
         cluster = self.cluster
         cluster.set_configuration_options(values={'hinted_handoff_enabled': False})
-        cluster.set_batch_commitlog(enabled=True)
+        cluster.set_batch_commitlog(enabled=True, use_batch_window = cluster.version() < '5.0')
         logger.debug("Starting cluster..")
         cluster.populate(3).start()
 
@@ -1063,7 +1064,7 @@ class TestRepair(BaseRepairTest):
         """
         cluster = self.cluster
         cluster.set_configuration_options(values={'hinted_handoff_enabled': False})
-        cluster.set_batch_commitlog(enabled=True)
+        cluster.set_batch_commitlog(enabled=True, use_batch_window = cluster.version() < '5.0')
         logger.debug("Starting cluster..")
         cluster.populate(3).start()
 
@@ -1106,7 +1107,7 @@ class TestRepair(BaseRepairTest):
         """
         cluster = self.cluster
         cluster.set_configuration_options(values={'hinted_handoff_enabled': False})
-        cluster.set_batch_commitlog(enabled=True)
+        cluster.set_batch_commitlog(enabled=True, use_batch_window = cluster.version() < '5.0')
         logger.debug("Starting cluster..")
         cluster.populate(3).start()
 
@@ -1328,7 +1329,7 @@ class TestRepair(BaseRepairTest):
         # Disable hinted handoff and set batch commit log so this doesn't
         # interfere with the test (this must be after the populate)
         cluster.set_configuration_options(values={'hinted_handoff_enabled': False})
-        cluster.set_batch_commitlog(enabled=True)
+        cluster.set_batch_commitlog(enabled=True, use_batch_window = cluster.version() < '5.0')
         logger.debug("Setting up cluster..")
         cluster.populate(3)
         node1, node2, node3 = cluster.nodelist()

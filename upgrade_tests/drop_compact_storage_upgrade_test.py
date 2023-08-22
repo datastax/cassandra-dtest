@@ -6,13 +6,14 @@ import logging
 from cassandra.protocol import InvalidRequest
 
 from dtest import Tester
+from upgrade_tests.upgrade_manifest import current_2_2_x
 
 since = pytest.mark.since
 logger = logging.getLogger(__name__)
 
 VERSION_30 = 'github:apache/cassandra-3.0'
 VERSION_311 = 'github:apache/cassandra-3.11'
-VERSION_TRUNK = 'github:apache/trunk'
+VERSION_40 = 'github:apache/cassandra-4.0'
 
 
 @pytest.mark.upgrade_test
@@ -23,15 +24,17 @@ class TestDropCompactStorage(Tester):
         node1, node2, node3 = cluster.nodelist()
 
         # Forcing cluster version on purpose
-        cluster.set_install_dir(version="2.1.14")
+        cluster.set_install_dir(version=current_2_2_x.version)
         self.install_nodetool_legacy_parsing()
         cluster.start(wait_for_binary_proto=True)
 
         session = self.patient_exclusive_cql_connection(node1)
         session.execute(
             "CREATE KEYSPACE drop_compact_storage_test WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '2'};")
+        session.cluster.control_connection.wait_for_schema_agreement()
         session.execute(
             "CREATE TABLE drop_compact_storage_test.test (a text PRIMARY KEY, b text, c text) WITH COMPACT STORAGE;")
+        session.cluster.control_connection.wait_for_schema_agreement()
 
         for i in range(1, 100):
             session.execute(
@@ -54,7 +57,7 @@ class TestDropCompactStorage(Tester):
 
         node.set_install_dir(version=to_version)
         node.set_configuration_options(values={'enable_drop_compact_storage': 'true'})
-        node.start(wait_other_notice=False, wait_for_binary_proto=False, verbose=False)
+        node.start(wait_for_binary_proto=True)
 
     @since('3.0', max_version='3.11')
     def test_drop_compact_storage(self):
@@ -94,9 +97,10 @@ class TestDropCompactStorage(Tester):
         time.sleep(2)
 
         session.execute("ALTER TABLE drop_compact_storage_test.test DROP COMPACT STORAGE")
+        session.cluster.control_connection.wait_for_schema_agreement()
         session.execute("SELECT * FROM drop_compact_storage_test.test")
 
-    @since('4.0')
+    @since('4.0', max_version='4.99')
     def test_drop_compact_storage_mixed_cluster(self):
         """
         @jira_ticket CASSANDRA-15897
@@ -140,7 +144,7 @@ class TestDropCompactStorage(Tester):
 
         self.upgrade_node(node2, VERSION_311)
 
-        self.upgrade_node(node3, VERSION_TRUNK)
+        self.upgrade_node(node3, VERSION_40)
 
         node1.nodetool("upgradesstables")
         time.sleep(2)
@@ -153,7 +157,7 @@ class TestDropCompactStorage(Tester):
         self.drop_compact_storage(session, assert_msg_part1, node1.ip_addr, node2.ip_addr, assert_msg_part2)
 
         for node in [node1, node2]:
-            self.upgrade_node(node, VERSION_TRUNK)
+            self.upgrade_node(node, VERSION_40)
             time.sleep(5)
             node.nodetool("upgradesstables")
 
@@ -162,4 +166,5 @@ class TestDropCompactStorage(Tester):
         session = self.patient_exclusive_cql_connection(node1)
         session.execute("SELECT * FROM drop_compact_storage_test.test")
         session.execute("ALTER TABLE drop_compact_storage_test.test DROP COMPACT STORAGE")
+        session.cluster.control_connection.wait_for_schema_agreement()
         session.execute("SELECT * FROM drop_compact_storage_test.test")

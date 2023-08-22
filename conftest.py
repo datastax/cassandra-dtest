@@ -1,5 +1,8 @@
 import copy
-import collections
+try:
+    import collections.abc as collections
+except ImportError:
+    import collections
 import logging
 import os
 import platform
@@ -22,6 +25,7 @@ from dtest import running_in_docker, cleanup_docker_environment_before_test_exec
 from dtest_config import DTestConfig
 from dtest_setup import DTestSetup
 from dtest_setup_overrides import DTestSetupOverrides
+from upgrade_tests import upgrade_manifest
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +108,7 @@ def pytest_configure(config):
     if not config.getoption("--help"):
         dtest_config = DTestConfig()
         dtest_config.setup(config)
+        upgrade_manifest.set_config(config)
         if dtest_config.metatests and config.args[0] == str(os.getcwd()):
             config.args = ['./meta_tests']
 
@@ -111,8 +116,8 @@ def pytest_configure(config):
 def sufficient_system_resources_for_resource_intensive_tests():
     mem = virtual_memory()
     total_mem_gb = mem.total / 1024 / 1024 / 1024
-    logger.info("total available system memory is %dGB" % total_mem_gb)
-    # todo kjkj: do not hard code our bound.. for now just do 9 instances at 3gb a piece
+    logger.info("total available system memory is %dGB, require 27GB for resource intensive tests" % total_mem_gb)
+    # do not hard code our bound.. for now just do 9 instances at 3gb a piece
     return total_mem_gb >= 9 * 3
 
 
@@ -152,7 +157,7 @@ def fixture_logging_setup(request):
     log_level = logging.INFO
     try:
         # first see if logging level overridden by user as command line argument
-        log_level_from_option = pytest.config.getoption("--log-level")
+        log_level_from_option = request.config.getoption("--log-level")
         if log_level_from_option is not None:
             log_level = logging.getLevelName(log_level_from_option)
         else:
@@ -161,22 +166,22 @@ def fixture_logging_setup(request):
         # nope, user didn't specify it as a command line argument to pytest, check if
         # we have a default in the loaded pytest.ini. Note: words are seperated in variables
         # in .ini land with a "_" while the command line arguments use "-"
-        if pytest.config.inicfg.get("log_level") is not None:
-            log_level = logging.getLevelName(pytest.config.inicfg.get("log_level"))
+        if request.config.inicfg.get("log_level") is not None:
+            log_level = logging.getLevelName(request.config.inicfg.get("log_level"))
 
     logging.root.setLevel(log_level)
 
     logging_format = None
     try:
         # first see if logging level overridden by user as command line argument
-        log_format_from_option = pytest.config.getoption("--log-format")
+        log_format_from_option = request.config.getoption("--log-format")
         if log_format_from_option is not None:
             logging_format = log_format_from_option
         else:
             raise ValueError
     except ValueError:
-        if pytest.config.inicfg.get("log_format") is not None:
-            logging_format = pytest.config.inicfg.get("log_format")
+        if request.config.inicfg.get("log_format") is not None:
+            logging_format = request.config.inicfg.get("log_format")
 
     # ccm logger is configured to spit everything to console
     # we want it to use logging setup configured for tests
@@ -202,8 +207,8 @@ def fixture_logging_setup(request):
 
 @pytest.fixture(scope="session")
 def log_global_env_facts(fixture_dtest_config, fixture_logging_setup):
-    if pytest.config.pluginmanager.hasplugin('junitxml'):
-        my_junit = getattr(pytest.config, '_xml', None)
+    if fixture_dtest_config.config.pluginmanager.hasplugin('junitxml'):
+        my_junit = getattr(fixture_dtest_config.config, '_xml', None)
         my_junit.add_global_property('USE_VNODES', fixture_dtest_config.use_vnodes)
 
 
@@ -446,6 +451,10 @@ def fixture_since(request, fixture_dtest_setup):
         # are excluded by the annotation
         if hasattr(request.cls, "UPGRADE_PATH"):
             upgrade_path = request.cls.UPGRADE_PATH
+            if hasattr(upgrade_path, 'upgrade_meta'):
+                skip_msg = _skip_msg(LooseVersion(upgrade_path.upgrade_meta.family), since, max_version)
+                if skip_msg:
+                    pytest.skip(skip_msg)
             ccm_repo_cache_dir, _ = ccmlib.repository.setup(upgrade_path.starting_meta.version)
             starting_version = get_version_from_build(ccm_repo_cache_dir)
             skip_msg = _skip_msg(starting_version, since, max_version)
@@ -477,22 +486,28 @@ def fixture_ported_to_in_jvm(request, fixture_dtest_setup):
     """
     Adds a new mark called 'ported_to_in_jvm' which denotes that a test was ported to an in-JVM dtest.
 
-    In-JVM dtests do not currently support running with vnodes, so tests that use this annotation will
-    still be run around those configurations.
+    In-JVM dtests only support running with vnodes since 4.1, so tests that use this annotation will
+    still be run around those configurations if they are testing an older branch.
     """
     marker = request.node.get_closest_marker('ported_to_in_jvm')
-    if marker and not request.config.getoption("--use-vnodes"):
+    if marker:
 
-        if not marker.args:
-            pytest.skip("ported to in-jvm")
-
-        from_str = marker.args[0]
+        from_str = marker.args[0] if marker.args else "2.2.13"  # JVM dtests were introduced on 2.2.13
         ported_from_version = LooseVersion(from_str)
+        use_vnodes = request.config.getoption("--use-vnodes")
 
-        # For upgrade tests don't run the test if any of the involved versions
-        # are excluded by the annotation
+        # For upgrade tests don't run the test if any of the involved versions are excluded by the annotation
         if hasattr(request.cls, "UPGRADE_PATH"):
+
+            # JVM upgrade dtests don't support vnodes, so we can't skip them
+            if use_vnodes:
+                return
+
             upgrade_path = request.cls.UPGRADE_PATH
+            if hasattr(upgrade_path, 'upgrade_meta'):
+                skip_msg = _skip_ported_msg(LooseVersion(upgrade_path.upgrade_meta.family), ported_from_version)
+                if skip_msg:
+                    pytest.skip(skip_msg)
             ccm_repo_cache_dir, _ = ccmlib.repository.setup(upgrade_path.starting_meta.version)
             starting_version = get_version_from_build(ccm_repo_cache_dir)
             skip_msg = _skip_ported_msg(starting_version, ported_from_version)
@@ -509,6 +524,11 @@ def fixture_ported_to_in_jvm(request, fixture_dtest_setup):
             # Use cassandra_version_from_build as it's guaranteed to be a LooseVersion
             # whereas cassandra_version may be a string if set in the cli options
             current_running_version = fixture_dtest_setup.dtest_config.cassandra_version_from_build
+
+            # vnodes weren't supported nor tested before 4.1, so we can't skip them if the version is older than that
+            if use_vnodes and loose_version_compare(current_running_version, LooseVersion('4.1')) < 0:
+                return
+
             skip_msg = _skip_ported_msg(current_running_version, ported_from_version)
             if skip_msg:
                 pytest.skip(skip_msg)

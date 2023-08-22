@@ -42,7 +42,7 @@ class TestJMX(Tester):
         node1.flush()
         node1.stop(gently=False)
 
-        with pytest.raises(ToolError, message=r"ConnectException: 'Connection refused( \(Connection refused\))?'."):
+        with pytest.raises(ToolError, match=r"ConnectException: 'Connection refused( \(Connection refused\))?'."):
             node1.nodetool('netstats')
 
         # don't wait; we're testing for when nodetool is called on a node mid-startup
@@ -197,15 +197,22 @@ class TestJMX(Tester):
         node.flush()
         # Run a major compaction. This will be the compaction whose
         # progress we track.
-        node.nodetool_process('compact')
-        # We need to sleep here to give compaction time to start
-        # Why not do something smarter? Because if the bug regresses,
-        # we can't rely on jmx to tell us that compaction started.
-        time.sleep(5)
+        node.nodetool_process('compact keyspace1')
+        if self.cluster.version() >= LooseVersion('4.0'):
+            node.watch_log_for("Compacting")
+        elif self.cluster.version() >= LooseVersion('3.11'):
+            node.watch_log_for("Major compaction")
+        else:
+            node.watch_log_for("Compacting", filename="debug.log")
+
 
         compaction_manager = make_mbean('db', type='CompactionManager')
         with JolokiaAgent(node) as jmx:
-            progress_string = jmx.read_attribute(compaction_manager, 'CompactionSummary')[0]
+            summary = jmx.read_attribute(compaction_manager, 'CompactionSummary')
+            while (len(summary) < 1):
+                summary = jmx.read_attribute(compaction_manager, 'CompactionSummary')
+                time.sleep(1)
+            progress_string = summary[0]
 
             # Pause in between reads
             # to allow compaction to move forward
@@ -215,8 +222,14 @@ class TestJMX(Tester):
             var = 'Compaction@{uuid}(keyspace1, standard1, {progress}/{total})bytes'
             if self.cluster.version() >= LooseVersion('4.0'): # CASSANDRA-15954
                 var = 'Compaction({taskUuid}, {progress} / {total} bytes)@{uuid}(keyspace1, standard1)'
-            progress = int(parse.search(var, progress_string).named['progress'])
-            updated_progress = int(parse.search(var, updated_progress_string).named['progress'])
+            parsed = parse.search(var, progress_string) 
+            if parsed is None:
+                raise Exception("{} did not match {}".format(var, progress_string))
+            progress = int(parsed.named['progress'])
+            parsed = parse.search(var, updated_progress_string)
+            if parsed is None:
+                raise Exception("{} did not match {}".format(var, updated_progress_string))
+            updated_progress = int(parsed.named['progress'])
 
             logger.debug(progress_string)
             logger.debug(updated_progress_string)

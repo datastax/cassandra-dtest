@@ -16,7 +16,7 @@ from cassandra.protocol import ProtocolException, SyntaxException
 from cassandra.query import SimpleStatement
 from cassandra.util import sortedset
 
-from dtest import RUN_STATIC_UPGRADE_MATRIX, MAJOR_VERSION_4
+from dtest import MAJOR_VERSION_4
 from thrift_bindings.thrift010.ttypes import \
     ConsistencyLevel as ThriftConsistencyLevel
 from thrift_bindings.thrift010.ttypes import (CfDef, Column, ColumnDef,
@@ -29,7 +29,8 @@ from tools.assertions import (assert_all, assert_invalid, assert_length_equal,
 from tools.data import rows_to_list
 from tools.misc import add_skip
 from .upgrade_base import UpgradeTester
-from .upgrade_manifest import build_upgrade_pairs, CASSANDRA_4_0, CASSANDRA_4_1
+from .upgrade_manifest import build_upgrade_pairs, CASSANDRA_4_0, CASSANDRA_4_1, RUN_STATIC_UPGRADE_MATRIX
+
 
 since = pytest.mark.since
 logger = logging.getLogger(__name__)
@@ -2652,11 +2653,26 @@ class TestCQL(UpgradeTester):
 
             assert_row_count(cursor, 'test', 1, where="k = 0 AND t = {}".format(dates[0]))
 
-            assert_invalid(cursor, "SELECT dateOf(k) FROM test WHERE k = 0 AND t = %s" % dates[0])
-
-            cursor.execute("SELECT dateOf(t), unixTimestampOf(t) FROM test WHERE k = 0 AND t = %s" % dates[0])
-            cursor.execute("SELECT t FROM test WHERE k = 0 AND t > maxTimeuuid(1234567) AND t < minTimeuuid('2012-11-07 18:18:22-0800')")
+            # test function with deprecated pre-5.0 names
             # not sure what to check exactly so just checking the query returns
+            assert_invalid(cursor, "SELECT minTimeuuid(k) FROM test WHERE k = 0 AND t = %s" % dates[0])
+            cursor.execute("SELECT t FROM test WHERE k = 0"
+                           " AND t > maxTimeuuid(1234567)"
+                           " AND t < minTimeuuid('2012-11-07 18:18:22-0800')")
+            if self.get_node_version(is_upgraded) >= LooseVersion('2.2'):
+                cursor.execute("SELECT toTimestamp(t), toUnixTimestamp(t) FROM test WHERE k = 0 AND t = %s" % dates[0])
+
+            # test function with new post-5.0 names
+            if self.get_node_version(is_upgraded) >= LooseVersion('5.0'):
+                assert_invalid(cursor, "SELECT min_timeuuid(k) FROM test WHERE k = 0 AND t = %s" % dates[0])
+                cursor.execute("SELECT t FROM test WHERE k = 0"
+                               " AND t > max_timeuuid(1234567)"
+                               " AND t < min_timeuuid('2012-11-07 18:18:22-0800')")
+                cursor.execute("SELECT to_timestamp(t), to_unix_timestamp(t) FROM test WHERE k = 0 AND t = %s"
+                               % dates[0])
+            # test functions removed in 5.0
+            else:
+                cursor.execute("SELECT dateOf(t), unixTimestampOf(t) FROM test WHERE k = 0 AND t = %s" % dates[0])
 
     def test_float_with_exponent(self):
         cursor = self.prepare()
@@ -2722,6 +2738,7 @@ class TestCQL(UpgradeTester):
         execute_concurrent_with_args(cursor,
                                      cursor.prepare("INSERT INTO t1 (a, b) VALUES (?, ?)"),
                                      [(i, i) for i in range(100)])
+        self.install_nodetool_legacy_parsing()
         self.cluster.flush()
 
         def check_read_all(cursor):
@@ -3028,7 +3045,11 @@ class TestCQL(UpgradeTester):
             for i in range(0, 5):
                 cursor.execute("INSERT INTO test (k, t) VALUES (%d, now())" % i)
 
-            cursor.execute("SELECT dateOf(t) FROM test")
+            if self.get_node_version(is_upgraded) >= LooseVersion('2.2'):
+                cursor.execute("SELECT totimestamp(t) FROM test")
+
+            if self.get_node_version(is_upgraded) < LooseVersion('5.0'):
+                cursor.execute("SELECT dateOf(t) FROM test")
 
     def test_conditional_update(self):
         cursor = self.prepare()
@@ -3423,7 +3444,12 @@ class TestCQL(UpgradeTester):
             cursor.execute("TRUNCATE test")
 
             cursor.execute("INSERT INTO test(k) VALUES (0)")
-            assert_one(cursor, "SELECT dateOf(t) FROM test WHERE k=0", [None])
+
+            if self.get_node_version(is_upgraded) >= LooseVersion('2.2'):
+                assert_one(cursor, "SELECT toTimestamp(t) FROM test WHERE k=0", [None])
+
+            if self.get_node_version(is_upgraded) < LooseVersion('5.0'):
+                assert_one(cursor, "SELECT dateOf(t) FROM test WHERE k=0", [None])
 
     def test_cas_simple(self):
         # cursor = self.prepare(nodes=3, rf=3)

@@ -34,6 +34,32 @@ class AbstractTestAuth(Tester):
             permissions = ('ALTER', 'DROP', 'DESCRIBE')
         return [(creator, role, perm) for perm in permissions]
 
+    def cluster_version_has_masking_permissions(self):
+        return self.cluster.version() >= LooseVersion('5.0')
+
+    def data_resource_creator_permissions(self, creator, resource):
+        """
+        Assemble a list of all permissions needed to create data on a given resource
+        @param creator User who needs permissions
+        @param resource The resource to grant permissions on
+        @return A list of permissions for creator on resource
+        """
+        permissions = []
+        for perm in 'SELECT', 'MODIFY', 'ALTER', 'DROP', 'AUTHORIZE':
+            permissions.append((creator, resource, perm))
+
+        if self.cluster_version_has_masking_permissions():
+            permissions.append((creator, resource, 'UNMASK'))
+            permissions.append((creator, resource, 'SELECT_MASKED'))
+
+        if resource.startswith("<keyspace "):
+            permissions.append((creator, resource, 'CREATE'))
+            keyspace = resource[10:-1]
+            # also grant the creator of a ks perms on functions in that ks
+            for perm in 'CREATE', 'ALTER', 'DROP', 'AUTHORIZE', 'EXECUTE':
+                permissions.append((creator, '<all functions in %s>' % keyspace, perm))
+        return permissions
+
 
 class TestAuth(AbstractTestAuth):
 
@@ -977,9 +1003,9 @@ class TestAuth(AbstractTestAuth):
 
         # CASSANDRA-7216 automatically grants permissions on a role to its creator
         if self.cluster.cassandra_version() >= '2.2.0':
-            all_permissions.extend(data_resource_creator_permissions('cassandra', '<keyspace ks>'))
-            all_permissions.extend(data_resource_creator_permissions('cassandra', '<table ks.cf>'))
-            all_permissions.extend(data_resource_creator_permissions('cassandra', '<table ks.cf2>'))
+            all_permissions.extend(self.data_resource_creator_permissions('cassandra', '<keyspace ks>'))
+            all_permissions.extend(self.data_resource_creator_permissions('cassandra', '<table ks.cf>'))
+            all_permissions.extend(self.data_resource_creator_permissions('cassandra', '<table ks.cf2>'))
             all_permissions.extend(self.role_creator_permissions('cassandra', '<role bob>'))
             all_permissions.extend(self.role_creator_permissions('cassandra', '<role cathy>'))
 
@@ -992,7 +1018,7 @@ class TestAuth(AbstractTestAuth):
 
         expected_permissions = [('cathy', '<table ks.cf>', 'MODIFY'), ('bob', '<table ks.cf>', 'DROP')]
         if self.cluster.cassandra_version() >= '2.2.0':
-            expected_permissions.extend(data_resource_creator_permissions('cassandra', '<table ks.cf>'))
+            expected_permissions.extend(self.data_resource_creator_permissions('cassandra', '<table ks.cf>'))
         self.assertPermissionsListed(expected_permissions, cassandra, "LIST ALL PERMISSIONS ON ks.cf NORECURSIVE")
 
         expected_permissions = [('cathy', '<table ks.cf2>', 'SELECT')]
@@ -1166,25 +1192,6 @@ class TestAuth(AbstractTestAuth):
         assert sorted(expected) == sorted(perms)
 
 
-def data_resource_creator_permissions(creator, resource):
-    """
-    Assemble a list of all permissions needed to create data on a given resource
-    @param creator User who needs permissions
-    @param resource The resource to grant permissions on
-    @return A list of permissions for creator on resource
-    """
-    permissions = []
-    for perm in 'SELECT', 'MODIFY', 'ALTER', 'DROP', 'AUTHORIZE':
-        permissions.append((creator, resource, perm))
-    if resource.startswith("<keyspace "):
-        permissions.append((creator, resource, 'CREATE'))
-        keyspace = resource[10:-1]
-        # also grant the creator of a ks perms on functions in that ks
-        for perm in 'CREATE', 'ALTER', 'DROP', 'AUTHORIZE', 'EXECUTE':
-            permissions.append((creator, '<all functions in %s>' % keyspace, perm))
-    return permissions
-
-
 @since('2.2')
 class TestAuthRoles(AbstractTestAuth):
 
@@ -1222,7 +1229,7 @@ class TestAuthRoles(AbstractTestAuth):
         @jira_ticket CASSANDRA-7653
         """
         dtest_setup_overrides = DTestSetupOverrides()
-        if dtest_config.cassandra_version_from_build >= '3.0':
+        if '3.0' <= dtest_config.cassandra_version_from_build < '4.2':
             dtest_setup_overrides.cluster_options = ImmutableMapping({'enable_user_defined_functions': 'true',
                                                                       'enable_scripted_user_defined_functions': 'true'})
         else:
@@ -1394,11 +1401,18 @@ class TestAuthRoles(AbstractTestAuth):
         as_mike.execute("CREATE KEYSPACE ks WITH replication = {'class':'SimpleStrategy', 'replication_factor':1}")
         as_mike.execute("CREATE TABLE ks.cf (id int primary key, val int)")
         as_mike.execute("CREATE ROLE role1 WITH PASSWORD = '11111' AND SUPERUSER = false AND LOGIN = true")
-        as_mike.execute("""CREATE FUNCTION ks.state_function_1(a int, b int)
-                        CALLED ON NULL INPUT
-                        RETURNS int
-                        LANGUAGE javascript
-                        AS ' a + b'""")
+        if self.cluster.version() < LooseVersion('4.2'):
+            as_mike.execute("""CREATE FUNCTION ks.state_function_1(a int, b int)
+                            CALLED ON NULL INPUT
+                            RETURNS int
+                            LANGUAGE javascript
+                            AS ' a + b'""")
+        else:
+            as_mike.execute("""CREATE FUNCTION ks.state_function_1(a int, b int)
+                            CALLED ON NULL INPUT
+                            RETURNS int
+                            LANGUAGE java
+                            AS ' return a + b;'""")
         as_mike.execute("""CREATE AGGREGATE ks.simple_aggregate_1(int)
                         SFUNC state_function_1
                         STYPE int
@@ -1408,8 +1422,8 @@ class TestAuthRoles(AbstractTestAuth):
         mike_permissions = [('mike', '<all roles>', 'CREATE'),
                             ('mike', '<all keyspaces>', 'CREATE')]
         mike_permissions.extend(self.role_creator_permissions('mike', '<role role1>'))
-        mike_permissions.extend(data_resource_creator_permissions('mike', '<keyspace ks>'))
-        mike_permissions.extend(data_resource_creator_permissions('mike', '<table ks.cf>'))
+        mike_permissions.extend(self.data_resource_creator_permissions('mike', '<keyspace ks>'))
+        mike_permissions.extend(self.data_resource_creator_permissions('mike', '<table ks.cf>'))
         mike_permissions.extend(function_resource_creator_permissions('mike', '<function ks.state_function_1(int, int)>'))
         mike_permissions.extend(function_resource_creator_permissions('mike', '<function ks.simple_aggregate_1(int)>'))
 
@@ -1684,30 +1698,41 @@ class TestAuthRoles(AbstractTestAuth):
         self.superuser.execute("CREATE TABLE ks.cf (id int primary key, val int)")
         self.superuser.execute("CREATE ROLE mike WITH PASSWORD = '12345' AND SUPERUSER = false AND LOGIN = true")
         self.superuser.execute("CREATE ROLE role1 WITH SUPERUSER = false AND LOGIN = false")
-        self.superuser.execute("CREATE FUNCTION ks.state_func(a int, b int) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'a+b'")
+        if self.cluster.version() < LooseVersion('4.2'):
+            self.superuser.execute("CREATE FUNCTION ks.state_func(a int, b int) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'a+b'")
+        else:
+            self.superuser.execute("CREATE FUNCTION ks.state_func(a int, b int) CALLED ON NULL INPUT RETURNS int LANGUAGE java AS ' return a+b;'")
         self.superuser.execute("CREATE AGGREGATE ks.agg_func(int) SFUNC state_func STYPE int")
 
         # GRANT ALL ON ALL KEYSPACES grants Permission.ALL_DATA
 
         # GRANT ALL ON KEYSPACE grants Permission.ALL_DATA
         self.superuser.execute("GRANT ALL ON KEYSPACE ks TO mike")
-        self.assert_permissions_listed([("mike", "<keyspace ks>", "CREATE"),
-                                        ("mike", "<keyspace ks>", "ALTER"),
-                                        ("mike", "<keyspace ks>", "DROP"),
-                                        ("mike", "<keyspace ks>", "SELECT"),
-                                        ("mike", "<keyspace ks>", "MODIFY"),
-                                        ("mike", "<keyspace ks>", "AUTHORIZE")],
+        permissions = [("mike", "<keyspace ks>", "CREATE"),
+                       ("mike", "<keyspace ks>", "ALTER"),
+                       ("mike", "<keyspace ks>", "DROP"),
+                       ("mike", "<keyspace ks>", "SELECT"),
+                       ("mike", "<keyspace ks>", "MODIFY"),
+                       ("mike", "<keyspace ks>", "AUTHORIZE")]
+        if self.cluster_version_has_masking_permissions():
+            permissions.append(("mike", "<keyspace ks>", "UNMASK"))
+            permissions.append(("mike", "<keyspace ks>", "SELECT_MASKED"))
+        self.assert_permissions_listed(permissions,
                                        self.superuser,
                                        "LIST ALL PERMISSIONS OF mike")
         self.superuser.execute("REVOKE ALL ON KEYSPACE ks FROM mike")
 
         # GRANT ALL ON TABLE does not include CREATE (because the table must already be created before the GRANT)
         self.superuser.execute("GRANT ALL ON ks.cf TO MIKE")
-        self.assert_permissions_listed([("mike", "<table ks.cf>", "ALTER"),
-                                        ("mike", "<table ks.cf>", "DROP"),
-                                        ("mike", "<table ks.cf>", "SELECT"),
-                                        ("mike", "<table ks.cf>", "MODIFY"),
-                                        ("mike", "<table ks.cf>", "AUTHORIZE")],
+        permissions = [("mike", "<table ks.cf>", "ALTER"),
+                       ("mike", "<table ks.cf>", "DROP"),
+                       ("mike", "<table ks.cf>", "SELECT"),
+                       ("mike", "<table ks.cf>", "MODIFY"),
+                       ("mike", "<table ks.cf>", "AUTHORIZE")]
+        if self.cluster_version_has_masking_permissions():
+            permissions.append(("mike", "<table ks.cf>", "UNMASK"))
+            permissions.append(("mike", "<table ks.cf>", "SELECT_MASKED"))
+        self.assert_permissions_listed(permissions,
                                        self.superuser,
                                        "LIST ALL PERMISSIONS OF mike")
         self.superuser.execute("REVOKE ALL ON ks.cf FROM mike")
@@ -1808,8 +1833,8 @@ class TestAuthRoles(AbstractTestAuth):
                                 ("role1", "<table ks.cf>", "SELECT"),
                                 ("role2", "<table ks.cf>", "ALTER"),
                                 ("role2", "<role role1>", "ALTER")]
-        expected_permissions.extend(data_resource_creator_permissions('cassandra', '<keyspace ks>'))
-        expected_permissions.extend(data_resource_creator_permissions('cassandra', '<table ks.cf>'))
+        expected_permissions.extend(self.data_resource_creator_permissions('cassandra', '<keyspace ks>'))
+        expected_permissions.extend(self.data_resource_creator_permissions('cassandra', '<table ks.cf>'))
         expected_permissions.extend(self.role_creator_permissions('cassandra', '<role mike>'))
         expected_permissions.extend(self.role_creator_permissions('cassandra', '<role role1>'))
         expected_permissions.extend(self.role_creator_permissions('cassandra', '<role role2>'))
@@ -2155,8 +2180,12 @@ class TestAuthRoles(AbstractTestAuth):
         """
         self.setup_table()
         self.superuser.execute("CREATE ROLE mike WITH PASSWORD = '12345' AND LOGIN = true")
-        self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'")
-        self.superuser.execute("CREATE FUNCTION ks.\"plusOne\" ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'")
+        if self.cluster.version() < LooseVersion('4.2'):
+            self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'")
+            self.superuser.execute("CREATE FUNCTION ks.\"plusOne\" ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'")
+        else:
+            self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE java AS 'return input + 1;'")
+            self.superuser.execute("CREATE FUNCTION ks.\"plusOne\" ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE java AS 'return input + 1;'")
 
         # grant / revoke on a specific function
         self.superuser.execute("GRANT EXECUTE ON FUNCTION ks.plus_one(int) TO mike")
@@ -2200,7 +2229,10 @@ class TestAuthRoles(AbstractTestAuth):
         """
         self.setup_table()
         self.superuser.execute("CREATE ROLE mike")
-        self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'")
+        if self.cluster.version() < LooseVersion('4.2'):
+            self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'")
+        else:
+            self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE java AS 'return input + 1;'")
         self.superuser.execute("GRANT EXECUTE ON FUNCTION ks.plus_one(int) TO mike")
         self.superuser.execute("GRANT EXECUTE ON FUNCTION ks.plus_one(int) TO mike")
         self.assert_permissions_listed([("mike", "<function ks.plus_one(int)>", "EXECUTE")],
@@ -2228,8 +2260,12 @@ class TestAuthRoles(AbstractTestAuth):
         self.superuser.execute("INSERT INTO ks.t1 (k,v) values (1,1)")
         self.superuser.execute("CREATE ROLE mike WITH PASSWORD = '12345' AND LOGIN = true")
         self.superuser.execute("GRANT SELECT ON ks.t1 TO mike")
-        self.superuser.execute("CREATE FUNCTION ks.func_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'")
-        self.superuser.execute("CREATE FUNCTION ks.func_two ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'")
+        if self.cluster.version() < LooseVersion('4.2'):
+            self.superuser.execute("CREATE FUNCTION ks.func_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'")
+            self.superuser.execute("CREATE FUNCTION ks.func_two ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'")
+        else:
+            self.superuser.execute("CREATE FUNCTION ks.func_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE java AS 'return input + 1;'")
+            self.superuser.execute("CREATE FUNCTION ks.func_two ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE java AS 'return input + 1;'")
 
         as_mike = self.get_session(user='mike', password='12345')
         select_one = "SELECT k, v, ks.func_one(v) FROM ks.t1 WHERE k = 1"
@@ -2283,12 +2319,18 @@ class TestAuthRoles(AbstractTestAuth):
         * Verify mike can create a new UDF iff he has the CREATE permission
         """
         self.setup_table()
-        self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'")
+        if self.cluster.version() < LooseVersion('4.2'):
+            self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'")
+        else:
+            self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE java AS 'return input + 1;'")
         self.superuser.execute("CREATE ROLE mike WITH PASSWORD = '12345' AND LOGIN = true")
         as_mike = self.get_session(user='mike', password='12345')
 
         # can't replace an existing function without ALTER permission on the parent ks
-        cql = "CREATE OR REPLACE FUNCTION ks.plus_one( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript as '1 + input'"
+        if self.cluster.version() < LooseVersion('4.2'):
+            cql = "CREATE OR REPLACE FUNCTION ks.plus_one( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript as '1 + input'"
+        else:
+            cql = "CREATE OR REPLACE FUNCTION ks.plus_one( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE java as 'return 1 + input;'"
         assert_unauthorized(as_mike, cql,
                             r"User mike has no ALTER permission on <function ks.plus_one\(int\)> or any of its parents")
         self.superuser.execute("GRANT ALTER ON FUNCTION ks.plus_one(int) TO mike")
@@ -2328,7 +2370,10 @@ class TestAuthRoles(AbstractTestAuth):
                        InvalidRequest)
 
         # can't create a new function without CREATE on the parent keyspace's collection of functions
-        cql = "CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'"
+        if self.cluster.version() < LooseVersion('4.2'):
+            cql = "CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'"
+        else:
+            cql = "CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE java AS 'return input + 1;'"
         assert_unauthorized(as_mike, cql,
                             "User mike has no CREATE permission on <all functions in ks> or any of its parents")
         self.superuser.execute("GRANT CREATE ON ALL FUNCTIONS IN KEYSPACE ks TO mike")
@@ -2345,7 +2390,10 @@ class TestAuthRoles(AbstractTestAuth):
         """
         self.setup_table()
         self.superuser.execute("CREATE ROLE mike WITH PASSWORD = '12345' AND LOGIN = true")
-        self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'")
+        if self.cluster.version() < LooseVersion('4.2'):
+            self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'")
+        else:
+            self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE java AS 'return input + 1;'")
         self.superuser.execute("GRANT EXECUTE ON FUNCTION ks.plus_one(int) TO mike")
         self.superuser.execute("GRANT EXECUTE ON ALL FUNCTIONS IN KEYSPACE ks TO mike")
         self.superuser.execute("GRANT EXECUTE ON ALL FUNCTIONS TO mike")
@@ -2373,7 +2421,10 @@ class TestAuthRoles(AbstractTestAuth):
         """
         self.setup_table()
         self.superuser.execute("CREATE ROLE mike WITH PASSWORD = '12345' AND LOGIN = true")
-        self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'")
+        if self.cluster.version() < LooseVersion('4.2'):
+            self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'")
+        else: 
+            self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE java AS 'return input + 1;'")
         self.superuser.execute("GRANT EXECUTE ON FUNCTION ks.plus_one(int) TO mike")
         self.superuser.execute("GRANT EXECUTE ON ALL FUNCTIONS IN KEYSPACE ks TO mike")
 
@@ -2401,8 +2452,12 @@ class TestAuthRoles(AbstractTestAuth):
         """
         self.setup_table()
         self.superuser.execute("CREATE ROLE mike WITH PASSWORD = '12345' AND LOGIN = true")
-        self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'")
-        self.superuser.execute("CREATE FUNCTION ks.plus_one ( input double ) CALLED ON NULL INPUT RETURNS double LANGUAGE javascript AS 'input + 1'")
+        if self.cluster.version() < LooseVersion('4.2'):
+            self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'")
+            self.superuser.execute("CREATE FUNCTION ks.plus_one ( input double ) CALLED ON NULL INPUT RETURNS double LANGUAGE javascript AS 'input + 1'")
+        else:
+            self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE java AS 'return input + 1;'")
+            self.superuser.execute("CREATE FUNCTION ks.plus_one ( input double ) CALLED ON NULL INPUT RETURNS double LANGUAGE java AS 'return input + 1;'")
 
         # grant execute on one variant
         self.superuser.execute("GRANT EXECUTE ON FUNCTION ks.plus_one(int) TO mike")
@@ -2444,7 +2499,10 @@ class TestAuthRoles(AbstractTestAuth):
         """
         self.setup_table()
         self.superuser.execute("CREATE ROLE mike WITH PASSWORD = '12345' AND LOGIN = true")
-        self.superuser.execute("CREATE FUNCTION ks.state_func (a int, b int) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'a + b'")
+        if self.cluster.version() < LooseVersion('4.2'):
+            self.superuser.execute("CREATE FUNCTION ks.state_func (a int, b int) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'a + b'")
+        else:
+            self.superuser.execute("CREATE FUNCTION ks.state_func (a int, b int) CALLED ON NULL INPUT RETURNS int LANGUAGE java AS 'return a + b;'")
         self.superuser.execute("CREATE AGGREGATE ks.agg_func (int) SFUNC state_func STYPE int")
         self.superuser.execute("GRANT EXECUTE ON FUNCTION ks.state_func(int, int) TO mike")
         self.superuser.execute("GRANT EXECUTE ON FUNCTION ks.agg_func(int) TO mike")
@@ -2497,7 +2555,10 @@ class TestAuthRoles(AbstractTestAuth):
         @param cql The statement to verify. Should contain the UDF ks.plus_one
         """
         self.setup_table()
-        self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'")
+        if self.cluster.version() < LooseVersion('4.2'):
+            self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'")
+        else:
+            self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE java AS 'return input + 1;'")
         self.superuser.execute("CREATE ROLE mike WITH PASSWORD = '12345' AND LOGIN = true")
         self.superuser.execute("GRANT ALL PERMISSIONS ON ks.t1 TO mike")
         self.superuser.execute("INSERT INTO ks.t1 (k,v) values (1,1)")
@@ -2518,7 +2579,10 @@ class TestAuthRoles(AbstractTestAuth):
         self.setup_table()
         self.superuser.execute("CREATE ROLE function_user")
         self.superuser.execute("GRANT EXECUTE ON ALL FUNCTIONS IN KEYSPACE ks TO function_user")
-        self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'")
+        if self.cluster.version() < LooseVersion('4.2'):
+            self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE javascript AS 'input + 1'")
+        else:
+            self.superuser.execute("CREATE FUNCTION ks.plus_one ( input int ) CALLED ON NULL INPUT RETURNS int LANGUAGE java AS 'return input + 1;'")
         self.superuser.execute("INSERT INTO ks.t1 (k,v) VALUES (1,1)")
         self.superuser.execute("CREATE ROLE mike WITH PASSWORD = '12345' AND LOGIN = true")
         self.superuser.execute("GRANT SELECT ON ks.t1 TO mike")
