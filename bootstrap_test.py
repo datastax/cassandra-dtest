@@ -692,13 +692,7 @@ class BootstrapTester(Tester):
         node2.stop(wait_other_notice=False)
 
         # Wipe its data
-        for data_dir in node2.data_directories():
-            logger.debug("Deleting {}".format(data_dir))
-            shutil.rmtree(data_dir)
-
-        commitlog_dir = os.path.join(node2.get_path(), 'commitlogs')
-        logger.debug("Deleting {}".format(commitlog_dir))
-        shutil.rmtree(commitlog_dir)
+        self._cleanup(node2)
 
         # Now start it, it should be allowed to join
         mark = node2.mark_log()
@@ -847,6 +841,12 @@ class BootstrapTester(Tester):
                           " cannot bootstrap while cassandra.consistent.rangemovement is true"
 
         cluster = self.cluster
+        configuration_options = {
+            'request_timeout_in_ms': 120000,
+            'read_request_timeout_in_ms': 120000,
+            'range_request_timeout_in_ms': 120000
+        }
+        cluster.set_configuration_options(configuration_options)
         cluster.set_environment_variable('CASSANDRA_TOKEN_PREGENERATION_DISABLED', 'True')
         cluster.populate(1)
         cluster.start()
@@ -882,7 +882,10 @@ class BootstrapTester(Tester):
         # bugs like 9484, where count(*) fails at higher
         # data loads.
         for _ in range(5):
-            assert_one(session, "SELECT count(*) from keyspace1.standard1", [500000], cl=ConsistencyLevel.ONE)
+            logger.info("Querying: SELECT count(*) from keyspace1.standard1")
+            # Improve reliability for slower/loaded test systems by using larger client timeout
+            assert_one(session, "SELECT count(*) from keyspace1.standard1", [500000], cl=ConsistencyLevel.ONE, timeout=180)
+            logger.info("Querying completed")
 
     def test_cleanup(self):
         """
@@ -931,6 +934,11 @@ class BootstrapTester(Tester):
             logger.debug("Deleting {}".format(data_dir))
             shutil.rmtree(data_dir)
         shutil.rmtree(commitlog_dir)
+        metadata_dir = os.path.join(node.get_path(), 'metadata')
+        if os.path.exists(metadata_dir):
+            logger.debug("Deleting {}".format(metadata_dir))
+            shutil.rmtree(metadata_dir)
+
 
     @since('2.2')
     @pytest.mark.ported_to_in_jvm # see org.apache.cassandra.distributed.test.BootstrapBinaryDisabledTest
@@ -1028,6 +1036,56 @@ class BootstrapTester(Tester):
             nt_resume_cmd += ' -f'
         return nt_resume_cmd
 
+    @since('4.0')
+    @pytest.mark.no_vnodes
+    def test_simple_bootstrap_with_everywhere_strategy(self):
+        cluster = self.cluster
+        tokens = cluster.balanced_tokens(2)
+        cluster.set_configuration_options(values={'num_tokens': 1})
+
+        logger.debug("[node1, node2] tokens: %r" % (tokens,))
+
+        keys = 10000
+
+        # Create a single node cluster
+        cluster.populate(1)
+        node1 = cluster.nodelist()[0]
+        node1.set_configuration_options(values={'initial_token': tokens[0]})
+        cluster.start()
+
+        session = self.patient_cql_connection(node1)
+        create_ks(session, 'ks', 'EverywhereStrategy')
+        create_cf(session, 'cf', columns={'c1': 'text', 'c2': 'text'})
+
+        insert_statement = session.prepare("INSERT INTO ks.cf (key, c1, c2) VALUES (?, 'value1', 'value2')")
+        execute_concurrent_with_args(session, insert_statement, [['k%d' % k] for k in range(keys)])
+
+        node1.flush()
+        node1.compact()
+
+        # Reads inserted data all during the bootstrap process. We shouldn't
+        # get any error
+        query_c1c2(session, random.randint(0, keys - 1), ConsistencyLevel.ONE)
+        session.shutdown()
+
+        # Bootstrapping a new node in the current version
+        node2 = new_node(cluster)
+        node2.set_configuration_options(values={'initial_token': tokens[1]})
+        node2.start(wait_for_binary_proto=True)
+        node2.compact()
+
+        node1.cleanup()
+        logger.debug("node1 size for ks.cf after cleanup: %s" % float(data_size(node1,'ks','cf')))
+        node1.compact()
+        logger.debug("node1 size for ks.cf after compacting: %s" % float(data_size(node1,'ks','cf')))
+
+        logger.debug("node2 size for ks.cf after compacting: %s" % float(data_size(node2,'ks','cf')))
+
+        size1 = float(data_size(node1,'ks','cf'))
+        size2 = float(data_size(node2,'ks','cf'))
+        assert_almost_equal(size1, size2, error=0.3)
+
+        assert_bootstrap_state(self, node2, 'COMPLETED')
 
 class TestBootstrap(BootstrapTester):
     """

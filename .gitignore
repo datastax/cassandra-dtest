@@ -16,3 +16,6 @@ bin/
 lib/
 pyvenv.cfg
 src/
+.vscode/
+
+pytest.ini

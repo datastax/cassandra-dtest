@@ -277,9 +277,9 @@ class TestOfflineTools(Tester):
             hashcomputed = False
             for line in outlines:
                 if sstable in line:
-                    if "Verifying BigTableReader" in line:
+                    if "Verifying " in line:
                         verified = True
-                    elif "Checking computed hash of BigTableReader" in line:
+                    elif "Checking computed hash of " in line:
                         hashcomputed = True
                     else:
                         logger.debug(line)
@@ -471,6 +471,7 @@ class TestOfflineTools(Tester):
                       "Class JavaLaunchHelper is implemented in both",
                       "Picked up JAVA_TOOL_OPTIONS:",
                       # Warnings for backward compatibility should be logged CASSANDRA-15234
+                      "Small commitlog volume detected",
                       "parameters have been deprecated. They have new names and/or value format"]
 
         if len(error) > 0:

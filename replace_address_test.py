@@ -358,6 +358,7 @@ class TestReplaceAddress(BaseReplaceAddressTest):
             # completely delete the data, commitlog, and saved caches
             for d in chain([os.path.join(node3.get_path(), "commitlogs")],
                            [os.path.join(node3.get_path(), "saved_caches")],
+                           [os.path.join(node3.get_path(), "metadata")],
                            node3.data_directories()):
                 if os.path.exists(d):
                     rmtree(d)
@@ -391,6 +392,7 @@ class TestReplaceAddress(BaseReplaceAddressTest):
 
         for d in chain([os.path.join(node3.get_path(), "commitlogs")],
                        [os.path.join(node3.get_path(), "saved_caches")],
+                       [os.path.join(node3.get_path(), "metadata")],
                        node3.data_directories()):
             if os.path.exists(d):
                 rmtree(d)
@@ -436,7 +438,7 @@ class TestReplaceAddress(BaseReplaceAddressTest):
                 if os.path.exists(system_data):
                     rmtree(system_data)
 
-            for d in ['commitlogs', 'saved_caches']:
+            for d in ['commitlogs', 'saved_caches', 'metadata']:
                 p = os.path.join(self.replacement_node.get_path(), d)
                 if os.path.exists(p):
                     rmtree(p)
@@ -591,7 +593,14 @@ class TestReplaceAddress(BaseReplaceAddressTest):
         self.replacement_node.watch_log_for("Unable to find sufficient sources for streaming range")
         assert_not_running(self.replacement_node)
 
-    def test_multi_dc_replace_with_rf1(self):
+    def test_multi_dc_replace_with_rf1_stcs(self):
+        self._test_multi_dc_replace_with_rf1('SizeTieredCompactionStrategy')
+
+    @since("4.0")
+    def test_multi_dc_replace_with_rf1_ucs(self):
+        self._test_multi_dc_replace_with_rf1('UnifiedCompactionStrategy')
+
+    def _test_multi_dc_replace_with_rf1(self, compaction_strategy):
         """
         Test that multi-dc replace works when rf=1 on each dc
         """
@@ -601,7 +610,7 @@ class TestReplaceAddress(BaseReplaceAddressTest):
         # Create the keyspace and table
         keyspace: keyspace1
         keyspace_definition: |
-          CREATE KEYSPACE keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'dc1': 1, 'dc2': 1};
+          CREATE KEYSPACE keyspace1 WITH replication = {{'class': 'NetworkTopologyStrategy', 'dc1': 1, 'dc2': 1}};
         table: users
         table_definition:
           CREATE TABLE users (
@@ -610,7 +619,7 @@ class TestReplaceAddress(BaseReplaceAddressTest):
             last_name text,
             email text,
             PRIMARY KEY(username)
-          ) WITH compaction = {'class':'SizeTieredCompactionStrategy'};
+          ) WITH compaction = {{'class':'{compaction_strategy}'}};
         insert:
           partitions: fixed(1)
           batchtype: UNLOGGED
@@ -618,7 +627,8 @@ class TestReplaceAddress(BaseReplaceAddressTest):
           read:
             cql: select * from users where username = ?
             fields: samerow
-        """
+        """.format(compaction_strategy=compaction_strategy)
+
         with tempfile.NamedTemporaryFile(mode='w+') as stress_config:
             stress_config.write(yaml_config)
             stress_config.flush()
@@ -650,3 +660,7 @@ class TestReplaceAddress(BaseReplaceAddressTest):
             logger.debug("Deleting {}".format(data_dir))
             rmtree(data_dir)
         rmtree(commitlog_dir)
+        metadata_dir = os.path.join(node.get_path(), 'metadata')
+        if os.path.exists(metadata_dir):
+            rmtree(metadata_dir)
+
