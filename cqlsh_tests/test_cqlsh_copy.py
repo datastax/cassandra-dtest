@@ -2223,6 +2223,39 @@ class TestCqlshCopy(Tester):
                          '[copy-to:{}]'.format(stress_table), 'maxattempts = 5'],
                         [('header', 'True'), ('maxattempts', '5' if direction == 'TO' else '6')])
 
+    @since('4.0')
+    def test_copy_from_vector_type(self):
+        # given
+        self.prepare()
+        self.session.execute("""
+            CREATE TABLE testcopyfrom (
+                id text PRIMARY KEY,
+                embedding_vector VECTOR<FLOAT, 6>                    
+            )""")
+
+        # assert table is empty
+        results = list(self.session.execute('SELECT * FROM testcopyfrom'))
+        assert 0 == len(results), 'table should be initially empty'
+
+        # prepare a csv data file
+        rows = [
+            ['1', '[0.1, 0.2, 0.3, 0.4, 0.5, 0.6]'],
+            ['2', '[-0.1, -0.2, -0.3, -0.4, -0.5, -0.6]']
+        ]
+        tempfile = self.get_temp_file()
+        write_rows_to_csv(tempfile.name, rows)
+
+        # when
+        _, err, status = self.run_cqlsh("COPY ks.testcopyfrom FROM '{name}'".format(name=tempfile.name))
+        assert 0 == status, "COPY command status should be successful, failed with: {}".format(err)
+
+        out, err, status = self.run_cqlsh(cmds='SELECT * FROM ks.testcopyfrom')
+        assert 0 == status, "select failed, failed with: {}".format(err)
+        results = self.parse_cqlsh_query(out=out, num_cols=2)
+
+        # then
+        assert sorted(rows) == sorted(results), 'result should contain two copied rows'
+
     def test_wrong_number_of_columns(self):
         """
         Test that a COPY statement will fail when trying to import from a CSV
