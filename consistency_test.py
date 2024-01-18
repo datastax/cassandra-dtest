@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 ExpectedConsistency = namedtuple('ExpectedConsistency', ('num_write_nodes', 'num_read_nodes', 'is_strong'))
 
+THREE_MEANS_ALL_BUT_ONE = '-Ddse.consistency_level.three_means_all_but_one=true'
 
 class TestHelper(Tester):
 
@@ -44,7 +45,7 @@ class TestHelper(Tester):
             ConsistencyLevel.ANY: 1,
             ConsistencyLevel.ONE: 1,
             ConsistencyLevel.TWO: 2,
-            ConsistencyLevel.THREE: 3,
+            ConsistencyLevel.THREE: (sum(rf_factors) - 1) if (THREE_MEANS_ALL_BUT_ONE in getattr(self, 'jvm_args', ())) else 3,
             ConsistencyLevel.QUORUM: sum(rf_factors) // 2 + 1,
             ConsistencyLevel.ALL: sum(rf_factors),
             ConsistencyLevel.LOCAL_QUORUM: rf_factors[dc] // 2 + 1,
@@ -132,7 +133,7 @@ class TestHelper(Tester):
             cluster.set_configuration_options(values={
                 'endpoint_snitch': 'org.apache.cassandra.locator.PropertyFileSnitch'})
 
-        cluster.start()
+        cluster.start(jvm_args=getattr(self, "jvm_args", None))
 
         self.ksname = 'mytestks'
         session = self.patient_exclusive_cql_connection(cluster.nodelist()[0])
@@ -237,10 +238,7 @@ class TestHelper(Tester):
         return ret[0][1] if ret else 0
 
 
-class TestAvailability(TestHelper):
-    """
-    Test that we can read and write depending on the number of nodes that are alive and the consistency levels.
-    """
+class AvailabilityBase(TestHelper):
 
     def _test_simple_strategy(self, combinations):
         """
@@ -307,6 +305,11 @@ class TestAvailability(TestHelper):
                 self.query_user(session, n, age, read_cl, check_ret)
         else:
             assert_unavailable(self.query_user, session, end, age, read_cl, check_ret)
+
+class TestAvailability(AvailabilityBase):
+    """
+    Test that we can read and write depending on the number of nodes that are alive and the consistency levels.
+    """
 
     def test_simple_strategy(self):
         """
@@ -1586,3 +1589,62 @@ class TestConsistency(Tester):
     def restart_node(self, node_number):
         stopped_node = self.cluster.nodes["node%d" % node_number]
         stopped_node.start(wait_for_binary_proto=True)
+
+
+class TestAllButOneAvailabilitySimpleStrategy(AvailabilityBase):
+
+    @since("4.0.11")
+    def test_simple_strategy(self):
+        """
+        Test for a single datacenter, using simple replication strategy.
+        """
+        self.nodes = 3
+        self.rf = 3
+        self.jvm_args = [THREE_MEANS_ALL_BUT_ONE]
+        ALL_BUT_ONE = ConsistencyLevel.THREE
+
+        self._start_cluster()
+
+        combinations = [
+            (ConsistencyLevel.TWO, ALL_BUT_ONE),
+            (ConsistencyLevel.QUORUM, ALL_BUT_ONE),
+            (ConsistencyLevel.ALL, ALL_BUT_ONE),
+            (ConsistencyLevel.LOCAL_QUORUM, ALL_BUT_ONE),
+            (ALL_BUT_ONE, ALL_BUT_ONE),
+            (ALL_BUT_ONE, ConsistencyLevel.LOCAL_QUORUM),
+            (ALL_BUT_ONE, ConsistencyLevel.ALL),
+            (ALL_BUT_ONE, ConsistencyLevel.QUORUM),
+            (ALL_BUT_ONE, ConsistencyLevel.TWO),
+        ]
+
+        self._test_simple_strategy(combinations)
+
+
+class TestAllButOneAvailabilityNts(AvailabilityBase):
+
+    @pytest.mark.resource_intensive
+    @since("4.0.11")
+    def test_network_topology_strategy(self):
+        """
+        Test for multiple datacenters, using network topology replication strategy.
+        """
+        self.nodes = [3, 3]
+        self.rf = OrderedDict([('dc1', 3), ('dc2', 3)])
+        self.jvm_args = [THREE_MEANS_ALL_BUT_ONE]
+        ALL_BUT_ONE = ConsistencyLevel.THREE
+
+        self._start_cluster()
+
+        combinations = [
+            (ConsistencyLevel.TWO, ALL_BUT_ONE),
+            (ConsistencyLevel.QUORUM, ALL_BUT_ONE),
+            (ConsistencyLevel.ALL, ALL_BUT_ONE),
+            (ConsistencyLevel.LOCAL_QUORUM, ALL_BUT_ONE),
+            (ALL_BUT_ONE, ALL_BUT_ONE),
+            (ALL_BUT_ONE, ConsistencyLevel.LOCAL_QUORUM),
+            (ALL_BUT_ONE, ConsistencyLevel.ALL),
+            (ALL_BUT_ONE, ConsistencyLevel.QUORUM),
+            (ALL_BUT_ONE, ConsistencyLevel.TWO),
+        ]
+
+        self._test_network_topology_strategy(combinations)
