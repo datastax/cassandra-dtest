@@ -170,7 +170,7 @@ class TestUserFunctions(Tester):
         # should now work - unambiguous
         session.execute("DROP FUNCTION overloaded")
 
-    @since('3.0', max_version='4.0.x')
+    @since('3.0', max_version='3.11.x')
     def test_udf_scripting(self):
         session = self.prepare()
         session.execute("create table nums (key int primary key, val double);")
