@@ -370,7 +370,7 @@ def fixture_dtest_setup(request,
             errors = check_logs_for_errors(dtest_setup)
             if len(errors) > 0:
                 failed = True
-                pytest.fail(msg='Unexpected error found in node logs (see stdout for full details). Errors: [{errors}]'
+                pytest.fail(reason='Unexpected error found in node logs (see stdout for full details). Errors: [{errors}]'
                             .format(errors=str.join(", ", errors)), pytrace=False)
     finally:
         try:

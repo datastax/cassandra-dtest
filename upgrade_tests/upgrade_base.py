@@ -165,7 +165,7 @@ class UpgradeTester(Tester, metaclass=ABCMeta):
                         "max version {}".format(new_version_from_build, self.max_version))
 
         if (new_version_from_build >= '3' and self.protocol_version is not None and self.protocol_version < 3):
-            pytest.skip('Protocol version {} incompatible '
+            pytest.skip(reason='Protocol version {} incompatible '
                         'with Cassandra version {}'.format(self.protocol_version, new_version_from_build))
         node1.set_log_level(logging.getLevelName(logging.root.level))
         node1.set_configuration_options(values={'internode_compression': 'none'})

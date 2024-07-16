@@ -88,7 +88,7 @@ class TestCQL(UpgradeTester):
         """ For large collections, make sure that we are printing warnings """
         for version in self.get_node_versions():
             if version >= '3.0':
-                pytest.skip('version {} not compatible with protocol version 2'.format(version))
+                pytest.skip(reason='version {} not compatible with protocol version 2'.format(version))
 
         # We only warn with protocol 2
         cursor = self.prepare(protocol_version=2)
@@ -1570,9 +1570,9 @@ class TestCQL(UpgradeTester):
 
             upgrade_to_version = self.get_node_version(is_upgraded=True)
             if LooseVersion('3.0.0') <= upgrade_to_version <= LooseVersion('3.0.6'):
-                pytest.skip(msg='CASSANDRA-11930 was fixed in 3.0.7 and 3.7')
+                pytest.skip(reason='CASSANDRA-11930 was fixed in 3.0.7 and 3.7')
             elif LooseVersion('3.1') <= upgrade_to_version <= LooseVersion('3.6'):
-                pytest.skip(msg='CASSANDRA-11930 was fixed in 3.0.7 and 3.7')
+                pytest.skip(reason='CASSANDRA-11930 was fixed in 3.0.7 and 3.7')
 
             session.execute("TRUNCATE ks.cf")
 
