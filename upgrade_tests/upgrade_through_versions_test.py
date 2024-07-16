@@ -973,6 +973,7 @@ MULTI_UPGRADES = (
 )
 
 for upgrade in MULTI_UPGRADES:
+    logger.info("Building upgrade {}".format(upgrade.name))
     # if any version_metas are None, this means they are versions not to be tested currently
     if all(upgrade.version_metas):
         # even for RUN_STATIC_UPGRADE_MATRIX we only test upgrade paths jdk compatible with the end "indev_" version (or any JAVA<jdk_version>_HOME defined)
@@ -990,8 +991,10 @@ for upgrade in MULTI_UPGRADES:
                         break
 
             create_upgrade_class(upgrade.name, [m for m in metas], protocol_version=upgrade.protocol_version, extra_config=upgrade.extra_config)
+            logger.info("Created upgrade test {} for versions {}, protocol {}, and extra config {}".format(upgrade.name, [m.name for m in metas], upgrade.protocol_version, upgrade.extra_config))
 
 
+logger.info("Building upgrade pairs")
 for pair in build_upgrade_pairs():
     create_upgrade_class(
         'Test' + pair.name,
@@ -999,3 +1002,4 @@ for pair in build_upgrade_pairs():
         protocol_version=pair.starting_meta.max_proto_v,
         bootstrap_test=True
     )
+    logger.info("Created upgrade test {} for versions {}, protocol {}".format(pair.name, [m.name for m in [pair.starting_meta, pair.upgrade_meta]], pair.starting_meta.max_proto_v))
