@@ -231,6 +231,8 @@ CURRENT_JAVA_VERSION = current_env_java_version()
 
 def jdk_compatible_steps(version_metas):
     metas = []
+    included_current_jdk_versions = []
+    included_java_xx_home_versions = []
     for version_meta in version_metas:
         # if you want multi-step upgrades to work with versions that require different jdks
         #   then define the JAVA<jdk_version>_HOME vars (e.g. JAVA8_HOME)
@@ -239,12 +241,20 @@ def jdk_compatible_steps(version_metas):
         javan_home_defined = False
         for meta_java_version in version_meta.java_versions:
             javan_home_defined |= 'JAVA{}_HOME'.format(meta_java_version) in os.environ
-        if CURRENT_JAVA_VERSION in version_meta.java_versions or javan_home_defined:
+        # FIXME CNDB-10194 temporary hack to skip C* 5.0 when JAVA_HOME is JDK8 but JAVA11_HOME is also defined
+        if CURRENT_JAVA_VERSION in version_meta.java_versions:
+        # if CURRENT_JAVA_VERSION in version_meta.java_versions or javan_home_defined:
             metas.append(version_meta)
+            if CURRENT_JAVA_VERSION in version_meta.java_versions:
+                included_current_jdk_versions.append(version_meta.version)
+            else:
+                included_java_xx_home_versions.append(version_meta.version)
         else:
             logger.info("Skipping version {} because it requires JDK {}. Current JDK is {} and none of {} env variables are defined."
                         .format(version_meta.version, version_meta.java_versions, CURRENT_JAVA_VERSION, ["JAVA{}_HOME".format(v) for v in version_meta.java_versions]))
 
+    logger.info("JDK compatible steps for {} compatible with current JDK {} or JAVAxx_HOME {}"
+                .format([m.version for m in version_metas], CURRENT_JAVA_VERSION, [v for v in included_current_jdk_versions + included_java_xx_home_versions]))
     return metas
 
 def build_upgrade_pairs():
