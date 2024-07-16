@@ -3458,7 +3458,7 @@ class TestPagingWithDeletions(BasePagingTester, PageAssertionMixin):
         except Exception:
             raise
         else:
-            pytest.fail('Expected ReadFailure or ReadTimeout, depending on the cluster version')
+            pytest.fail(reason='Expected ReadFailure or ReadTimeout, depending on the cluster version')
 
         if self.cluster.version() < "3.0":
             failure_msg = ("Scanned over.* tombstones in test_paging_size."
