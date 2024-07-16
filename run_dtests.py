@@ -151,8 +151,10 @@ class RunDTests():
         if args.dtest_print_tests_only:
             stdout, stderr = sp.communicate()
 
+            print("dtest_print_tests_only subprocess return code: %d" % sp.returncode)
             if sp.returncode != 0:
-                print(stderr.decode("utf-8"))
+                print("stdout: " + stdout.decode("utf-8"))
+                print("stderr: " + stderr.decode("utf-8"))
                 result = sp.returncode
                 exit(result)
 
@@ -163,8 +165,10 @@ class RunDTests():
                 collected_tests_output_file = open(args.dtest_print_tests_output, "w")
                 collected_tests_output_file.write(joined_test_modules)
                 collected_tests_output_file.close()
+            print(joined_test_modules)
 
         else:
+            print("Printing stdout/stderr from subprocess")
             while True:
                 stdout_output = sp.stdout.readline()
                 stdout_output_str = stdout_output.decode("utf-8")
@@ -180,6 +184,7 @@ class RunDTests():
                 if stderr_output_str:
                     print(stderr_output_str.strip())
 
+        print("Subprocess return code: %d" % sp.returncode)
         exit(sp.returncode)
 
 
