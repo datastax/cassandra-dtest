@@ -227,7 +227,7 @@ class TestRebuild(Tester):
             logger.debug('Checking data is complete -> '),
             for i in range(0, 20000):
                 query_c1c2(session, i, ConsistencyLevel.LOCAL_ONE)
-            pytest.fail('Expected: INCOMPLETE')
+            pytest.fail(reason='Expected: INCOMPLETE')
 
         logger.debug('Executing second rebuild -> '),
         node3.nodetool('rebuild dc1')
