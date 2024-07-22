@@ -368,7 +368,7 @@ class TestCompaction(Tester):
         Check that we log a warning when the partition size is bigger than compaction_large_partition_warning_threshold_mb
         """
         cluster = self.cluster
-        if self.supports_guardrails:
+        if self.supports_guardrails():
             cluster.set_configuration_options({'guardrails': {'partition_size_warn_threshold_in_mb': 1}})
         else:
             cluster.set_configuration_options({'compaction_large_partition_warning_threshold_mb': 1})
@@ -394,7 +394,7 @@ class TestCompaction(Tester):
         verb = 'Writing' if self.cluster.version() > '2.2' else 'Compacting'
         sizematcher = '\d+ bytes' if self.cluster.version() < LooseVersion('3.6') else '\d+\.\d{3}(K|M|G)iB'
         log_message = '{} large partition ks/large:user \({}'.format(verb, sizematcher)
-        if self.supports_guardrails:
+        if self.supports_guardrails():
             log_message = "Detected partition 'user' in ks.large of size 2MB is greater than the maximum recommended size \(1MB\)"
         node.watch_log_for(log_message, from_mark=mark, timeout=180)
 

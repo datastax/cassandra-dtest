@@ -36,7 +36,7 @@ class TestReadFailures(Tester):
         self.expected_expt = ReadFailure
 
     def _prepare_cluster(self):
-        if self.supports_guardrails:
+        if self.supports_guardrails():
             self.cluster.set_configuration_options(
                 values={'guardrails': {'tombstone_warn_threshold': -1,
                                        'tombstone_failure_threshold': self.tombstone_failure_threshold}}
