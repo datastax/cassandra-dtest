@@ -44,8 +44,11 @@ class TestGuardrails(BaseGuardrailsTester):
         """
 
         self.fixture_dtest_setup.ignore_log_patterns = ["Write request failed because disk usage exceeds failure threshold"]
-        guardrails_config = {'guardrails': {'disk_usage_percentage_warn_threshold': 98,
-                                            'disk_usage_percentage_failure_threshold': 99}}
+        if self.supports_guardrails():
+            guardrails_config = {'guardrails': {'disk_usage_percentage_warn_threshold': 98,
+                                                'disk_usage_percentage_failure_threshold': 99}}
+        else:
+            guardrails_config = {'data_disk_usage_percentage_warn_threshold': 98, 'data_disk_usage_percentage_fail_threshold': 99}
 
         logger.debug("prepare 2-node cluster with rf=1 and guardrails enabled")
         session = self.prepare(rf=1, nodes=2, options=guardrails_config, extra_jvm_args=['-Dcassandra.disk_usage.monitor_interval_ms=100'], install_byteman=True)
@@ -83,7 +86,10 @@ class TestGuardrails(BaseGuardrailsTester):
             fut = session2.execute_async("INSERT INTO t(id, v) VALUES({v}, {v})".format(v=x))
             fut.result()
             if fut.warnings:
-                assert ["Replica disk usage exceeds warn threshold"] == fut.warnings
+                if self.supports_guardrails():
+                    assert ["Replica disk usage exceeds warn threshold"] == fut.warnings
+                else:
+                    assert ["Guardrail replica_disk_usage violated: Replica disk usage exceeds warning threshold"] == fut.warnings
                 warnings = warnings + 1
 
         assert rows != warnings,"Expect node2 emits some warnings, but got all warnings"
