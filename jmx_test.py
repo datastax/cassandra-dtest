@@ -202,7 +202,7 @@ class TestJMX(Tester):
         # progress we track.
         node.nodetool_process('compact keyspace1')
         if self.cluster.version() >= LooseVersion('4.0'):
-            node.watch_log_for("Compacting")
+            node.watch_log_for("Compacting", filename="debug.log")
         elif self.cluster.version() >= LooseVersion('3.11'):
             node.watch_log_for("Major compaction")
         else:
