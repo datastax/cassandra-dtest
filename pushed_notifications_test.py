@@ -395,6 +395,7 @@ class TestVariousNotifications(Tester):
                               'range_request_timeout_in_ms': 40000}
         else:
             config_options = {'tombstone_failure_threshold': 500,
+                              'tombstone_warn_threshold': 400,
                               'read_request_timeout_in_ms': 30000,  # 30 seconds
                               'range_request_timeout_in_ms': 40000}
 
