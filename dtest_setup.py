@@ -379,7 +379,7 @@ class DTestSetup(object):
         return cluster_version >= LooseVersion('4.0')
 
     def supports_guardrails(self):
-        return self.cluster.version() >= LooseVersion('4.0')
+        return self.cluster.version() >= LooseVersion('4.0') and self.cluster.version() < LooseVersion('5.0')
 
 
     def cleanup_last_test_dir(self):

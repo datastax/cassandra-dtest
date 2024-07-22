@@ -388,7 +388,7 @@ class TestVariousNotifications(Tester):
 
         self.fixture_dtest_setup.allow_log_errors = True
         opts={}
-        if self.supports_guardrails:
+        if self.supports_guardrails():
             opts = {'guardrails': {'tombstone_warn_threshold': -1,
                                    'tombstone_failure_threshold': 500},
                                    'read_request_timeout_in_ms': 30000,  # 30 seconds
@@ -412,7 +412,7 @@ class TestVariousNotifications(Tester):
             "PRIMARY KEY (id, mytext) )"
         )
 
-        if self.supports_guardrails:
+        if self.supports_guardrails():
             # cell tombstones are not counted towards the threshold, so we delete rows
             query = "delete from test where id = 1 and mytext = '{}'"
         else:
