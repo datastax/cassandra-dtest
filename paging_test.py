@@ -3424,7 +3424,7 @@ class TestPagingWithDeletions(BasePagingTester, PageAssertionMixin):
         supports_v5_protocol = self.supports_v5_protocol(self.cluster.version())
 
         self.fixture_dtest_setup.allow_log_errors = True
-        if self.supports_guardrails:
+        if self.supports_guardrails():
             config_opts = {'guardrails': {'tombstone_failure_threshold': 500,
                                           'tombstone_warn_threshold': -1,
                                           'write_consistency_levels_disallowed': {}}}
@@ -3434,7 +3434,7 @@ class TestPagingWithDeletions(BasePagingTester, PageAssertionMixin):
         self.session = self.prepare()
         self.setup_data()
 
-        if self.supports_guardrails:
+        if self.supports_guardrails():
             # cell tombstones are not counted towards the threshold, so we delete rows
             query = "delete from paging_test where id = 1 and mytext = '{}'"
         else:
