@@ -1224,7 +1224,7 @@ class TestPreJoinCallback(Tester):
             node2 = new_node(cluster)
             node2.set_configuration_options(values={'initial_token': token})
             node2.start(wait_for_binary_proto=True)
-            assert node2.grep_log('Executing pre-join post-bootstrap tasks')
+            assert node2.grep_log('Executing pre-join post-bootstrap tasks', filename='debug.log')
 
         self._base_test(bootstrap)
 
@@ -1255,7 +1255,7 @@ class TestPreJoinCallback(Tester):
             node2.nodetool(BootstrapTester.nodetool_resume_command(cluster))
             node2.watch_log_for('Starting listening for CQL clients')
             assert_bootstrap_state(self, node2, 'COMPLETED')
-            assert node2.grep_log('Executing pre-join post-bootstrap tasks')
+            assert node2.grep_log('Executing pre-join post-bootstrap tasks', filename='debug.log')
 
         self._base_test(resume)
 
@@ -1265,10 +1265,10 @@ class TestPreJoinCallback(Tester):
             node2.set_configuration_options(values={'initial_token': token})
             node2.start(join_ring=False, wait_for_binary_proto=True, wait_other_notice=240)
             assert node2.grep_log('Not joining ring as requested')
-            assert not node2.grep_log('Executing pre-join')
+            assert not node2.grep_log('Executing pre-join', filename='debug.log')
 
             node2.nodetool("join")
-            assert node2.grep_log('Executing pre-join post-bootstrap tasks')
+            assert node2.grep_log('Executing pre-join post-bootstrap tasks', filename='debug.log')
 
         self._base_test(manual_join)
 
@@ -1278,10 +1278,10 @@ class TestPreJoinCallback(Tester):
             node2.set_configuration_options(values={'initial_token': token})
             node2.start(jvm_args=["-Dcassandra.write_survey=true"], wait_for_binary_proto=True)
             assert node2.grep_log('Startup complete, but write survey mode is active, not becoming an active ring member.')
-            assert not node2.grep_log('Executing pre-join')
+            assert not node2.grep_log('Executing pre-join', filename='debug.log')
 
             node2.nodetool("join")
             assert node2.grep_log('Leaving write survey mode and joining ring at operator request')
-            assert node2.grep_log('Executing pre-join post-bootstrap tasks')
+            assert node2.grep_log('Executing pre-join post-bootstrap tasks', filename='debug.log')
 
         self._base_test(write_survey_and_join)
