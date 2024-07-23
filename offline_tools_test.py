@@ -472,7 +472,8 @@ class TestOfflineTools(Tester):
                       "Picked up JAVA_TOOL_OPTIONS:",
                       # Warnings for backward compatibility should be logged CASSANDRA-15234
                       "Small commitlog volume detected",
-                      "parameters have been deprecated. They have new names and/or value format"]
+                      "parameters have been deprecated. They have new names and/or value format",
+                      "Unable to determine block size for commit log directory: null"]
 
         if len(error) > 0:
             for line in error.splitlines():
