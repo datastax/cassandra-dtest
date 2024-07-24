@@ -47,12 +47,20 @@ class TestClientRequestMetrics(Tester):
 
     def setup_once(self):
         cluster = self.cluster
-        cluster.set_configuration_options({'read_request_timeout_in_ms': 3000,
-                                           'write_request_timeout_in_ms': 3000,
-                                           'phi_convict_threshold': 12,
-                                           'tombstone_warn_threshold': -1,
-                                           'tombstone_failure_threshold': TOMBSTONE_FAILURE_THRESHOLD,
-                                           'enable_materialized_views': 'true'})
+        if self.supports_cc4_guardrails():
+            cluster.set_configuration_options({'read_request_timeout_in_ms': 3000,
+                                            'write_request_timeout_in_ms': 3000,
+                                            'phi_convict_threshold': 12,
+                                            'tombstone_warn_threshold': -1,
+                                            'tombstone_failure_threshold': TOMBSTONE_FAILURE_THRESHOLD,
+                                            'enable_materialized_views': 'true'})
+        else:
+            cluster.set_configuration_options({'read_request_timeout_in_ms': 3000,
+                                            'write_request_timeout_in_ms': 3000,
+                                            'phi_convict_threshold': 12,
+                                            'tombstone_warn_threshold': TOMBSTONE_FAILURE_THRESHOLD,
+                                            'tombstone_failure_threshold': TOMBSTONE_FAILURE_THRESHOLD,
+                                            'enable_materialized_views': 'true'})
         cluster.populate(2, debug=True)
         cluster.start(jvm_args=JVM_ARGS)
         node1 = cluster.nodelist()[0]
