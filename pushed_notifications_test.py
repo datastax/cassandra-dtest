@@ -395,7 +395,7 @@ class TestVariousNotifications(Tester):
                                    'range_request_timeout_in_ms': 40000}
         else:
             opts = {'tombstone_failure_threshold': 500,
-                    'tombstone_warn_threshold': 400,
+                    'tombstone_warn_threshold': 500,
                     'read_request_timeout_in_ms': 30000,  # 30 seconds
                     'range_request_timeout_in_ms': 40000}
         if self.cluster.cassandra_version() >= LooseVersion('4.1.6') and not str(self.cluster.cassandra_version()).startswith(('5.0-alpha', '5.0-beta')):
