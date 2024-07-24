@@ -43,7 +43,8 @@ class TestReadFailures(Tester):
             )
         else:
             self.cluster.set_configuration_options(
-                values={'tombstone_failure_threshold': self.tombstone_failure_threshold}
+                values={'tombstone_failure_threshold': self.tombstone_failure_threshold, 
+                        'tombstone_warn_threshold': -1 }
             )
         self.cluster.populate(3)
         self.cluster.start()
