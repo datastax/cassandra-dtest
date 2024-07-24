@@ -3429,7 +3429,8 @@ class TestPagingWithDeletions(BasePagingTester, PageAssertionMixin):
                                           'tombstone_warn_threshold': -1,
                                           'write_consistency_levels_disallowed': {}}}
         else:
-            config_opts = {'tombstone_failure_threshold': 500}
+            config_opts = {'tombstone_failure_threshold': 500,
+                           'tombstone_warn_threshold': -1}
         restart_cluster_and_update_config(self.cluster, config_opts)
         self.session = self.prepare()
         self.setup_data()
