@@ -14,6 +14,13 @@ JVM_ARGS = ['-Dchronicle.queue.synchronousFileShrinking=true']
 
 @since('4.0')
 class TestFQLTool(Tester):
+
+    @pytest.fixture(autouse=True)
+    def fixture_add_additional_log_patterns(self, fixture_dtest_setup):
+        fixture_dtest_setup.ignore_log_patterns = (
+                r'deprecated RollCycle',
+        )
+
     """
     Makes sure fqltool replay and fqltool compare work
     @jira_ticket CASSANDRA-14690
