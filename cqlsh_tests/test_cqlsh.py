@@ -2185,7 +2185,7 @@ Tracing session:""")
         logger.debug(fut.warnings)
         assert fut.warnings is not None
         assert 1 == len(fut.warnings)
-        expected_fut_warning = ("Unlogged batch covering {} partitions detected against table [client_warnings.test]. " +
+        expected_fut_warning = ("Guardrail unlogged_batch_across_partitions violated: Unlogged batch covering {} partitions detected against table [client_warnings.test]. " +
                                 "You should use a logged batch for atomicity, or asynchronous writes for performance.") \
                                 .format(max_partitions_per_batch + 1)
         assert expected_fut_warning == fut.warnings[0]
