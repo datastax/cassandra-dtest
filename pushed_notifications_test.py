@@ -387,18 +387,18 @@ class TestVariousNotifications(Tester):
         have_v5_protocol = self.supports_v5_protocol(self.cluster.version())
 
         self.fixture_dtest_setup.allow_log_errors = True
-        opts={}
+        opts = {'read_request_timeout_in_ms': 30000,  # 30 seconds
+                'range_request_timeout_in_ms': 40000}
+
         if self.supports_guardrails():
-            opts = {'guardrails': {'tombstone_warn_threshold': -1,
-                                   'tombstone_failure_threshold': 500},
-                                   'read_request_timeout_in_ms': 30000,  # 30 seconds
-                                   'range_request_timeout_in_ms': 40000}
+            opts['guardrails'] = {'tombstone_warn_threshold': -1,
+                                  'tombstone_failure_threshold': 500}
         else:
-            opts = {'tombstone_failure_threshold': 500,
-                    'tombstone_warn_threshold': 400,
-                    'read_request_timeout_in_ms': 30000,  # 30 seconds
-                    'range_request_timeout_in_ms': 40000}
-        if self.cluster.version() >= LooseVersion('4.1'):
+            opts['tombstone_warn_threshold'] = -1
+            opts['tombstone_failure_threshold'] = 500
+
+        # TODO this can be simplified when we are up-to-date with 5.0-rc1
+        if self.cluster.version() >= LooseVersion('4.1.6') and self.cluster.version() < LooseVersion('4.2') or self.cluster.version() >= LooseVersion('5.0-rc1'):
             opts['native_transport_timeout'] = '30s'
         self.cluster.set_configuration_options(values=opts)
         self.cluster.populate(3).start()
