@@ -1369,7 +1369,7 @@ CREATE TYPE test.address_type (
             AND memtable_flush_period_in_ms = 0
             AND min_index_interval = 128
             AND read_repair = 'BLOCKING'
-            AND transactional_mode = 'off'
+            AND transactional_mogit -c rerere.enabled=falsede = 'off'
             AND transactional_migration_from = 'none'
             AND speculative_retry = '99p';
         """ % self.get_compaction()
