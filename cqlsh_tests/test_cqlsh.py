@@ -131,9 +131,11 @@ class TestCqlsh(Tester, CqlshMixin):
 
 
     def get_compaction(self):
-        stcs = "AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', 'max_threshold': '32', 'min_threshold': '4'}"
-        ucs = "AND compaction = {'class': 'org.apache.cassandra.db.compaction.UnifiedCompactionStrategy', 'max_sstables_to_compact': '64', 'min_sstable_size': '100MiB', 'scaling_parameters': 'T4', 'sstable_growth': '0.3333333333333333', 'target_sstable_size': '1GiB'}"
-        return ucs if self.dtest_config.latest_config else stcs
+        # CC uses UCS by default
+        cc_ucs = "AND compaction = {'class': 'org.apache.cassandra.db.compaction.UnifiedCompactionStrategy'}"
+        if self.dtest_config.latest_config:
+            cc_ucs = "AND compaction = {'class': 'org.apache.cassandra.db.compaction.UnifiedCompactionStrategy', 'max_sstables_to_compact': '64', 'min_sstable_size': '100MiB', 'scaling_parameters': 'T4', 'sstable_growth': '0.3333333333333333', 'target_sstable_size': '1GiB'}"
+        return cc_ucs
 
 
     @pytest.mark.depends_cqlshlib
@@ -1187,7 +1189,7 @@ CREATE TYPE test.address_type (
                 PRIMARY KEY (id, col)
                 """
 
-        if self.cluster.version() >= LooseVersion('5.1'):
+        if self.cluster.cassandra_version() >= LooseVersion('5.1'):
             create_table += """
         ) WITH CLUSTERING ORDER BY (col ASC)
             AND additional_write_policy = '99p'
@@ -2107,7 +2109,7 @@ CREATE TABLE datetime_checks.values (
 
         if self.cluster.version() >= LooseVersion('5.0'):
             # See CASSANDRA-18547
-            self.verify_output("use tracing_checks; tracing on; select * from test", node1, """TRACING set to ON
+            self.verify_output("use tracing_checks; tracing on; select * from test", node1, """{}.
 
  id | val
 ----+-------
@@ -2116,7 +2118,7 @@ CREATE TABLE datetime_checks.values (
   3 | iuiou
 
 (3 rows)
-""")
+""".format('Tracing set to FULL' if node1.is_converged_core() else 'Tracing set to ON'))
         else:
             self.verify_output("use tracing_checks; tracing on; select * from test", node1, """Now Tracing is enabled
 
