@@ -131,9 +131,9 @@ class TestCqlsh(Tester, CqlshMixin):
 
 
     def get_compaction(self):
-        stcs = "AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', 'max_threshold': '32', 'min_threshold': '4'}"
-        ucs = "AND compaction = {'class': 'org.apache.cassandra.db.compaction.UnifiedCompactionStrategy', 'max_sstables_to_compact': '64', 'min_sstable_size': '100MiB', 'scaling_parameters': 'T4', 'sstable_growth': '0.3333333333333333', 'target_sstable_size': '1GiB'}"
-        return ucs if self.dtest_config.latest_config else stcs
+        # CC uses UCS by default
+        cc_ucs = "AND compaction = {'class': 'org.apache.cassandra.db.compaction.UnifiedCompactionStrategy'}"
+        return cc_ucs
 
 
     @pytest.mark.depends_cqlshlib
@@ -1184,6 +1184,7 @@ CREATE TYPE test.address_type (
                 PRIMARY KEY (id, col)
                 """
 
+        print(f"danj cluster.version={self.cluster.version()}")
         if self.cluster.version() >= LooseVersion('4.2'):
             create_table += """
         ) WITH CLUSTERING ORDER BY (col ASC)
