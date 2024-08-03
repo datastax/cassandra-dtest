@@ -1234,7 +1234,7 @@ class TestMaterializedViews(Tester):
         logger.debug("Checking logs to verify that some view build tasks have been stopped")
         for node in nodes:
             node.watch_log_for('Stopped build for view', filename='debug.log', timeout=120)
-            node.watch_log_for('Compaction interrupted: View build', filename='system.log', timeout=120)
+            node.watch_log_for('Compaction interrupted due to unknown reason: View build', filename='system.log', timeout=120)
             self.check_logs_for_errors()
 
         logger.debug("Drop the MV while it is still building")
@@ -1278,7 +1278,7 @@ class TestMaterializedViews(Tester):
         session = self.prepare(options={'concurrent_materialized_view_builders': 4}, install_byteman=True)
         session.execute("CREATE TABLE t (id int PRIMARY KEY, v int, v2 text, v3 decimal)")
         nodes = self.cluster.nodelist()
-        self.fixture_dtest_setup.ignore_log_patterns = [r'Compaction interrupted: View build',
+        self.fixture_dtest_setup.ignore_log_patterns = [r'Compaction interrupted due to unknown reason: View build',
                                                         r'Cannot send the message .* as messaging service is shutting down']
 
         logger.debug("Inserting initial data")
@@ -1304,7 +1304,7 @@ class TestMaterializedViews(Tester):
         logger.debug("Checking logs to verify that some view build tasks have been stopped")
         for node in nodes:
             node.watch_log_for('Stopped build for view', filename='debug.log', timeout=120)
-            node.watch_log_for('Compaction interrupted: View build', filename='system.log', timeout=120)
+            node.watch_log_for('Compaction interrupted due to unknown reason: View build', filename='system.log', timeout=120)
             node.watch_log_for('Interrupted build for view', filename='debug.log', timeout=120)
             assert not node.grep_log('Marking view', filename='debug.log')
             self.check_logs_for_errors()
