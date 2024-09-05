@@ -133,6 +133,8 @@ class TestCqlsh(Tester, CqlshMixin):
     def get_compaction(self):
         # CC uses UCS by default
         cc_ucs = "AND compaction = {'class': 'org.apache.cassandra.db.compaction.UnifiedCompactionStrategy'}"
+        if self.dtest_config.latest_config:
+            cc_ucs = "AND compaction = {'class': 'org.apache.cassandra.db.compaction.UnifiedCompactionStrategy', 'max_sstables_to_compact': '64', 'min_sstable_size': '100MiB', 'scaling_parameters': 'T4', 'sstable_growth': '0.3333333333333333', 'target_sstable_size': '1GiB'}"
         return cc_ucs
 
 
