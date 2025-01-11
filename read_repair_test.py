@@ -823,7 +823,8 @@ class TestReadRepairGuarantees(Tester):
                                                   'dynamic_snitch': False,
                                                   'write_request_timeout_in_ms': 500,
                                                   'read_request_timeout_in_ms': 500})
-        cluster.populate(3, install_byteman=True, debug=True).start(jvm_args=['-XX:-PerfDisableSharedMem'])
+        cluster.populate(3, install_byteman=True, debug=True).start(jvm_args=['-XX:-PerfDisableSharedMem',
+                                                                              '-Dcassandra.cluster_version_provider.min_stable_duration_ms=0'])
         session = fixture_dtest_setup.patient_exclusive_cql_connection(cluster.nodelist()[0], timeout=2)
 
         session.execute("CREATE KEYSPACE ks WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3}")
