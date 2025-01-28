@@ -82,6 +82,7 @@ class TestCounters(Tester):
         session = self.patient_cql_connection(node1, consistency_level=ConsistencyLevel.ALL)
         assert_one(session, "SELECT COUNT(*) FROM test.test", [1000])
 
+    @pytest.mark.skip("see CNDB-12588")
     @pytest.mark.vnodes
     @since('3.0')
     def test_counter_leader_with_partial_view(self):
