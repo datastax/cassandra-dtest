@@ -714,14 +714,6 @@ class TestReplaceAddress(BaseReplaceAddressTest):
         if os.path.exists(metadata_dir):
             rmtree(metadata_dir)
 
-    def _get_endpoint_status(self, node, target):
-        (out, _, _) = node.nodetool("sjk mx -b org.apache.cassandra.net:type=FailureDetector -mc -op getEndpointState -a {}".format(target.address()))
-        return [re.sub(r"  STATUS:\d+:([A-Za-z]+).*", r"\1", l) for l in out.splitlines() if re.match(r"  STATUS.*", l)][0]
-
-    def _get_endpoint_generation(self, node, target):
-        (out, _, _) = node.nodetool("sjk mx -b org.apache.cassandra.net:type=FailureDetector -mc -op getEndpointState -a {}".format(target.address()))
-        return int([re.sub(r"  generation:([0-9]+)", r"\1", l) for l in out.splitlines() if re.match(r"  generation.*", l)][0])
-
     @since('4.0')
     def test_revive_endpoint(self):
         """
@@ -788,3 +780,11 @@ class TestReplaceAddress(BaseReplaceAddressTest):
 
         nodetool_stderr = node1.nodetool("sjk mx -b org.apache.cassandra.net:type=Gossiper -mc -op reviveEndpoint -a {}".format(node2.address())).stderr
         assert "Cannot revive endpoint /127.0.0.2:7000: not in a (silent) shutdown state: NORMAL" in nodetool_stderr
+
+    def _get_endpoint_generation(self, node, target):
+        (out, _, _) = node.nodetool("sjk mx -b org.apache.cassandra.net:type=FailureDetector -mc -op getEndpointState -a {}".format(target.address()))
+        return int([re.sub(r"  generation:([0-9]+)", r"\1", l) for l in out.splitlines() if re.match(r"  generation.*", l)][0])
+
+    def _get_endpoint_status(self, node, target):
+        (out, _, _) = node.nodetool("sjk mx -b org.apache.cassandra.net:type=FailureDetector -mc -op getEndpointState -a {}".format(target.address()))
+        return [re.sub(r"  STATUS:\d+:([A-Za-z]+).*", r"\1", l) for l in out.splitlines() if re.match(r"  STATUS.*", l)][0]
