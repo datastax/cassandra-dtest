@@ -722,6 +722,7 @@ class TestReplaceAddress(BaseReplaceAddressTest):
         (out, _, _) = node.nodetool("sjk mx -b org.apache.cassandra.net:type=FailureDetector -mc -op getEndpointState -a {}".format(target.address()))
         return int([re.sub(r"  generation:([0-9]+)", r"\1", l) for l in out.splitlines() if re.match(r"  generation.*", l)][0])
 
+    @since('4.0')
     def test_revive_endpoint(self):
         """
         Rudimentary test for GossiperMBean.reviveEndpoint/assassinateEndpoint/unsafeSetEndpointState.
