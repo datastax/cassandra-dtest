@@ -1,4 +1,5 @@
 import os
+import re
 import tempfile
 from ccmlib.version import LooseVersion
 
@@ -43,7 +44,8 @@ class BaseReplaceAddressTest(Tester):
             r'failed stream session',
             r'Failed to properly handshake with peer',
             # ignore streaming error during resumable tests
-            r'peer 127.0.0.1:7000 is probably down'
+            r'peer 127.0.0.1:7000 is probably down',
+            r'Attempting gossip state mutation from illegal thread'
         )
 
     def _setup(self, n=3, opts=None, enable_byteman=False, mixed_versions=False):
@@ -712,3 +714,77 @@ class TestReplaceAddress(BaseReplaceAddressTest):
         if os.path.exists(metadata_dir):
             rmtree(metadata_dir)
 
+    @since('4.0')
+    def test_revive_endpoint(self):
+        """
+        Rudimentary test for GossiperMBean.reviveEndpoint/assassinateEndpoint/unsafeSetEndpointState.
+
+        @jira_ticket HCD-73
+        """
+        self._setup(n=2)
+
+        node1, node2 = self.cluster.nodelist()
+        node2.stop(wait_other_notice=False)
+
+        gen = self._get_endpoint_generation(node1, node2)
+        logger.debug("node2 generation:{}".format(gen))
+
+        # 1st test - assassinate the endpoint
+        logger.debug("assassinate node2")
+        (out, err, _) = node1.nodetool("assassinate {}".format(node2.address()))
+        logger.debug("  stdout:{}".format(out))
+        logger.debug("  stderr:{}".format(err))
+        status = self._get_endpoint_status(node1, node2)
+        assert "LEFT" == status, "Expecting node2 to have Gossip status LEFT, but is {}".format(status)
+
+        gen_assassinate = self._get_endpoint_generation(node1, node2)
+        logger.debug("node2 generation:{}".format(gen_assassinate))
+
+        assert gen_assassinate > gen, "assassinate should have increased the Gossip generation"
+
+        # Now revive the endpoint
+        logger.debug("revive node2")
+        (out, err, _) = node1.nodetool("sjk mx -b org.apache.cassandra.net:type=Gossiper -mc -op reviveEndpoint -a {}".format(node2.address()))
+        logger.debug("  stdout:{}".format(out))
+        logger.debug("  stderr:{}".format(err))
+        status = self._get_endpoint_status(node1, node2)
+        assert "NORMAL" == status, "Expecting node2 to have Gossip status NORMAL, but is {}".format(status)
+
+        gen_revive = self._get_endpoint_generation(node1, node2)
+        logger.debug("node2 generation:{}".format(gen_revive))
+        assert gen_revive > gen_assassinate, "revive should have increased the Gossip generation"
+
+        # 2nd test - bring the endpoint into hibernate
+        logger.debug("hibernate node2")
+        (out, err, _) = node1.nodetool("sjk mx -b org.apache.cassandra.net:type=Gossiper -mc -op unsafeSetEndpointState -a {} -a hibernate".format(node2.address()))
+        logger.debug("  stdout:{}".format(out))
+        logger.debug("  stderr:{}".format(err))
+        status = self._get_endpoint_status(node1, node2)
+        assert "hibernate" == status, "Expecting node2 to have Gossip status hibernate, but is {}".format(status)
+
+        gen_hiberate = self._get_endpoint_generation(node1, node2)
+        logger.debug("node2 generation:{}".format(gen_hiberate))
+        assert gen_hiberate > gen_revive, "assassinate should have increased the Gossip generation"
+
+        # Now revive the endpoint
+        logger.debug("revive node2")
+        (out, err, _) = node1.nodetool("sjk mx -b org.apache.cassandra.net:type=Gossiper -mc -op reviveEndpoint -a {}".format(node2.address()))
+        logger.debug("  stdout:{}".format(out))
+        logger.debug("  stderr:{}".format(err))
+        status = self._get_endpoint_status(node1, node2)
+        assert "NORMAL" == status, "Expecting node2 to have Gossip status NORMAL, but is {}".format(status)
+
+        gen_revive2 = self._get_endpoint_generation(node1, node2)
+        logger.debug("node2 generation:{}".format(gen_revive2))
+        assert gen_revive2 > gen_hiberate, "revive should have increased the Gossip generation"
+
+        nodetool_stderr = node1.nodetool("sjk mx -b org.apache.cassandra.net:type=Gossiper -mc -op reviveEndpoint -a {}".format(node2.address())).stderr
+        assert "Cannot revive endpoint /127.0.0.2:7000: not in a (silent) shutdown state: NORMAL" in nodetool_stderr
+
+    def _get_endpoint_generation(self, node, target):
+        (out, _, _) = node.nodetool("sjk mx -b org.apache.cassandra.net:type=FailureDetector -mc -op getEndpointState -a {}".format(target.address()))
+        return int([re.sub(r"  generation:([0-9]+)", r"\1", l) for l in out.splitlines() if re.match(r"  generation.*", l)][0])
+
+    def _get_endpoint_status(self, node, target):
+        (out, _, _) = node.nodetool("sjk mx -b org.apache.cassandra.net:type=FailureDetector -mc -op getEndpointState -a {}".format(target.address()))
+        return [re.sub(r"  STATUS:\d+:([A-Za-z]+).*", r"\1", l) for l in out.splitlines() if re.match(r"  STATUS.*", l)][0]
