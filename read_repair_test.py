@@ -394,8 +394,8 @@ class TestReadRepair(Tester):
         cluster = self.cluster
         cluster.populate(3)
         opts = {'write_request_timeout_in_ms': 30000, 'read_request_timeout_in_ms': 30000}
-        # TODO this can be simplified when we are up-to-date with 5.0-rc1
-        if self.cluster.version() >= LooseVersion('4.1.6') and self.cluster.version() < LooseVersion('4.2') or self.cluster.version() >= LooseVersion('5.0-rc1'):
+        # TODO this can be simplified when we are up-to-date with 5.0
+        if self.cluster.version() >= LooseVersion('4.1.6') and self.cluster.version() < LooseVersion('4.2') or self.cluster.version() >= LooseVersion('5.0'):
             opts['native_transport_timeout'] = '30s'
         cluster.set_configuration_options(values=opts)
         cluster.set_partitioner("org.apache.cassandra.dht.RandomPartitioner")
