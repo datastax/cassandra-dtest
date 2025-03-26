@@ -6,6 +6,7 @@ from collections import namedtuple
 
 import ccmlib.repository
 from ccmlib.common import get_version_from_build, get_jdk_version_int
+#from ccmlib.node import Node
 
 from enum import Enum
 
@@ -29,6 +30,9 @@ CASSANDRA_4_1 = '4.1'
 CASSANDRA_5_0 = '5.0'
 CASSANDRA_5_1 = '5.1'
 TRUNK = CASSANDRA_5_1
+
+CC4 = '4.0'
+CC5 = '5.0'
 
 RUN_STATIC_UPGRADE_MATRIX = os.environ.get('RUN_STATIC_UPGRADE_MATRIX', '').lower() in ('yes', 'true')
 
@@ -168,8 +172,14 @@ current_3_0_x = VersionMeta(name='current_3_0_x', family=CASSANDRA_3_0, variant=
 indev_3_11_x = VersionMeta(name='indev_3_11_x', family=CASSANDRA_3_11, variant='indev', version='github:apache/cassandra-3.11', min_proto_v=3, max_proto_v=4, java_versions=(8,))
 current_3_11_x = VersionMeta(name='current_3_11_x', family=CASSANDRA_3_11, variant='current', version='3.11.17', min_proto_v=3, max_proto_v=4, java_versions=(8,))
 
-indev_4_0_x = VersionMeta(name='indev_4_0_x', family=CASSANDRA_4_0, variant='indev', version='github:apache/cassandra-4.0', min_proto_v=3, max_proto_v=4, java_versions=(8,11))
-current_4_0_x = VersionMeta(name='current_4_0_x', family=CASSANDRA_4_0, variant='current', version='4.0.13', min_proto_v=4, max_proto_v=5, java_versions=(8,11))
+indev_4_0_x = VersionMeta(name='indev_4_0_x', family=CASSANDRA_4_0, variant='indev', version='github:apache/cassandra-4.0', min_proto_v=3, max_proto_v=4, java_versions=(11,))
+current_4_0_x = VersionMeta(name='current_4_0_x', family=CASSANDRA_4_0, variant='current', version='4.0.13', min_proto_v=4, max_proto_v=5, java_versions=(11,))
+
+indev_cc4 = VersionMeta(name='indev_cc4', family=CC4, variant='indev', version='github:datastax/main', min_proto_v=3, max_proto_v=4, java_versions=(8,11))
+#current_hcd_1_2 = VersionMeta(name='current_hcd_1_2', family=HCD_1_2, variant='current', version='4.0.13', min_proto_v=4, max_proto_v=5, java_versions=(8,11))
+
+indev_cc5 = VersionMeta(name='indev_cc5', family=CC5, variant='indev', version='github:datastax/main-5.0', min_proto_v=4, max_proto_v=5, java_versions=(11,17,22))
+#current_hcd_1_2 = VersionMeta(name='current_hcd_1_2', family=HCD_1_2, variant='current', version='4.0.13', min_proto_v=4, max_proto_v=5, java_versions=(8,11))
 
 indev_4_1_x = VersionMeta(name='indev_4_1_x', family=CASSANDRA_4_1, variant='indev', version='github:apache/cassandra-4.1', min_proto_v=4, max_proto_v=5, java_versions=(8,11))
 current_4_1_x = VersionMeta(name='current_4_1_x', family=CASSANDRA_4_1, variant='current', version='4.1.5', min_proto_v=4, max_proto_v=5, java_versions=(8,11))
@@ -194,9 +204,9 @@ indev_trunk = VersionMeta(name='indev_trunk', family=TRUNK, variant='indev', ver
 MANIFEST = {
     current_2_1_x: [indev_2_2_x, indev_3_0_x, indev_3_11_x],
     current_2_2_x: [indev_2_2_x, indev_3_0_x, indev_3_11_x],
-    current_3_0_x: [indev_3_0_x, indev_3_11_x, indev_4_0_x, indev_4_1_x],
-    current_3_11_x: [indev_3_11_x, indev_4_0_x, indev_4_1_x],
-    current_4_0_x:  [indev_4_0_x, indev_4_1_x, indev_5_0_x, indev_trunk],
+    current_3_0_x: [indev_3_0_x, indev_3_11_x, indev_4_0_x, indev_cc4, indev_4_1_x],
+    current_3_11_x: [indev_3_11_x, indev_4_0_x, indev_cc4, indev_4_1_x],
+    current_4_0_x:  [indev_4_0_x, indev_cc4, indev_4_1_x, indev_5_0_x, indev_trunk],
     current_4_1_x:  [indev_4_1_x, indev_5_0_x, indev_trunk],
 # TODO – uncomment when 5.0.0 is released
 # LooseVersion cant do 5.0-rc1 comparisons
@@ -204,11 +214,14 @@ MANIFEST = {
 
     indev_2_1_x: [indev_2_2_x, indev_3_0_x, indev_3_11_x],
     indev_2_2_x: [indev_3_0_x, indev_3_11_x],
-    indev_3_0_x: [indev_3_11_x, indev_4_0_x, indev_4_1_x],
-    indev_3_11_x: [indev_4_0_x, indev_4_1_x],
-    indev_4_0_x:  [indev_4_1_x, indev_5_0_x, indev_trunk],
+    indev_3_0_x: [indev_3_11_x, indev_4_0_x, indev_cc4, indev_4_1_x],
+    indev_3_11_x: [indev_4_0_x, indev_cc4, indev_4_1_x],
+    indev_4_0_x:  [indev_cc4, indev_4_1_x, indev_5_0_x, indev_trunk],
     indev_4_1_x:  [indev_5_0_x, indev_trunk],
     indev_5_0_x:  [indev_trunk]
+
+    #,
+    #current_hcd_1_2: [indev_cc4],
 }
 
 def _have_common_proto(origin_meta, destination_meta):
