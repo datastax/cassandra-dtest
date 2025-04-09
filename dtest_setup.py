@@ -18,6 +18,7 @@ from cassandra.cluster import EXEC_PROFILE_DEFAULT
 from cassandra.policies import WhiteListRoundRobinPolicy
 from ccmlib.common import is_win
 from ccmlib.cluster import Cluster, NodeError
+from ccmlib.extension import get_cluster_class
 
 from dtest import (get_ip_from_node, make_execution_profile, get_auth_provider, get_port_from_node,
                    get_eager_protocol_version, hack_legacy_parsing)
@@ -240,7 +241,7 @@ class DTestSetup(object):
             port = get_port_from_node(node)
 
         if protocol_version is None:
-            protocol_version = get_eager_protocol_version(node.cluster.version())
+            protocol_version = get_eager_protocol_version(node.cluster.cassandra_version())
 
         if user is not None:
             auth_provider = get_auth_provider(user=user, password=password)
@@ -463,7 +464,7 @@ class DTestSetup(object):
         phi_values = {'phi_convict_threshold': 5}
 
         # enable read time tracking of repaired data between replicas by default
-        if self.cluster.version() >= '4':
+        if self.cluster.cassandra_version() >= '4':
             repaired_data_tracking_values = {'repaired_data_tracking_for_partition_reads_enabled': 'true',
                                              'repaired_data_tracking_for_range_reads_enabled': 'true',
                                              'report_unconfirmed_repaired_data_mismatches': 'true'}
@@ -485,10 +486,10 @@ class DTestSetup(object):
         if self.setup_overrides is not None and len(self.setup_overrides.cluster_options) > 0:
             values = merge_dicts(values, self.setup_overrides.cluster_options)
 
-        # No more thrift in 4.0, and start_rpc doesn't exists anymore
-        if self.cluster.version() >= '4' and 'start_rpc' in values:
+        # No more thrift in 4.0, and start_rpc doesn't exist anymore
+        if self.cluster.cassandra_version() >= '4' and 'start_rpc' in values:
             del values['start_rpc']
-        if self.cluster.version() >= '4':
+        if self.cluster.cassandra_version() >= '4':
             values['corrupted_tombstone_strategy'] = 'exception'
 
         if self.dtest_config.use_vnodes:
@@ -503,6 +504,15 @@ class DTestSetup(object):
 
         self.cluster.set_configuration_options(values)
         logger.debug("Done setting configuration options:\n" + pprint.pformat(self.cluster._config_options, indent=4))
+
+    def prune_unsupported_config(self):
+        """Remove unsupported configuration options. Applicable for upgrade tests. """
+        if self.cluster.cassandra_version() < LooseVersion('4.0.1'):
+            if self.cluster._config_options is not None:
+                self.cluster._config_options.pop('repaired_data_tracking_for_partition_reads_enabled', None)
+                self.cluster._config_options.pop('repaired_data_tracking_for_range_reads_enabled', None)
+                self.cluster._config_options.pop('report_unconfirmed_repaired_data_mismatches', None)
+                self.cluster._config_options.pop('corrupted_tombstone_strategy', None)
 
     def maybe_setup_jacoco(self, cluster_name='test'):
         """Setup JaCoCo code coverage support"""
@@ -534,13 +544,14 @@ class DTestSetup(object):
 
     @staticmethod
     def create_ccm_cluster(dtest_setup):
-        logger.info("cluster ccm directory: " + dtest_setup.test_path)
         version = dtest_setup.dtest_config.cassandra_version
+        cluster_class = get_cluster_class(dtest_setup.dtest_config.cassandra_dir)
+        logger.info("cluster ccm directory: {} from {} type {} version {}".format(dtest_setup.test_path, dtest_setup.dtest_config.cassandra_dir, cluster_class, version))
 
         if version:
-            cluster = Cluster(dtest_setup.test_path, dtest_setup.cluster_name, cassandra_version=version)
+            cluster = cluster_class(dtest_setup.test_path, dtest_setup.cluster_name, version=version)
         else:
-            cluster = Cluster(dtest_setup.test_path, dtest_setup.cluster_name, cassandra_dir=dtest_setup.dtest_config.cassandra_dir)
+            cluster = cluster_class(dtest_setup.test_path, dtest_setup.cluster_name, install_dir=dtest_setup.dtest_config.cassandra_dir)
 
         cluster.set_datadir_count(dtest_setup.dtest_config.data_dir_count)
         cluster.set_environment_variable('CASSANDRA_LIBJEMALLOC', dtest_setup.dtest_config.jemalloc_path)
@@ -592,3 +603,4 @@ class DTestSetup(object):
         version that may not be compatible with the existing configuration options
         """
         self.init_default_config()
+        self.prune_unsupported_config()
