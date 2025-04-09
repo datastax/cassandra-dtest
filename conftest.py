@@ -457,13 +457,19 @@ def fixture_since(request, fixture_dtest_setup):
                 skip_msg = _skip_msg(LooseVersion(upgrade_path.upgrade_meta.family), since, max_version)
                 if skip_msg:
                     pytest.skip(skip_msg)
-            ccm_repo_cache_dir, _ = ccmlib.repository.setup(upgrade_path.starting_meta.version)
-            starting_version = get_version_from_build(ccm_repo_cache_dir)
+            if 'current' == upgrade_path.starting_meta.variant:
+                starting_version = LooseVersion(upgrade_path.starting_meta.version)
+            else:
+                ccm_repo_cache_dir, _ = ccmlib.repository.setup(upgrade_path.starting_meta.version)
+                starting_version = get_version_from_build(ccm_repo_cache_dir)
             skip_msg = _skip_msg(starting_version, since, max_version)
             if skip_msg:
                 pytest.skip(skip_msg)
-            ccm_repo_cache_dir, _ = ccmlib.repository.setup(upgrade_path.upgrade_meta.version)
-            ending_version = get_version_from_build(ccm_repo_cache_dir)
+            if 'current' == upgrade_path.upgrade_meta.variant:
+                ending_version = LooseVersion(upgrade_path.upgrade_meta.version)
+            else:
+                ccm_repo_cache_dir, _ = ccmlib.repository.setup(upgrade_path.upgrade_meta.version)
+                ending_version = get_version_from_build(ccm_repo_cache_dir)
             skip_msg = _skip_msg(ending_version, since, max_version)
             if skip_msg:
                 pytest.skip(skip_msg)
