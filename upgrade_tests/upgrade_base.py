@@ -44,6 +44,7 @@ class UpgradeTester(Tester, metaclass=ABCMeta):
 
         fixture_dtest_setup.ignore_log_patterns = fixture_dtest_setup.ignore_log_patterns + [
             r'RejectedExecutionException.*ThreadPoolExecutor has shut down',  # see  CASSANDRA-12364
+            r'Collectd is only supported on Linux',
         ]
 
     @pytest.fixture(autouse=True)
@@ -97,6 +98,19 @@ class UpgradeTester(Tester, metaclass=ABCMeta):
                 update_java_version(jvm_version=available__starting_versions[-1])
             else:
                 raise AssertionError("No overlapping versions found between available_versions {} and starting_meta.java_versions {}"
+                                 .format(available__starting_versions, self.UPGRADE_PATH.starting_meta.java_versions))
+
+        cluster.set_install_dir(version=self.UPGRADE_PATH.starting_version)
+
+        self.reinit_cluster_for_family(self.UPGRADE_PATH.starting_meta)
+
+        # if current jdk is not compatible with starting_version, use the highest available JDK version that is
+        if get_jdk_version_int() not in self.UPGRADE_PATH.starting_meta.java_versions:
+            available__starting_versions = [v for v in get_available_jdk_versions(os.environ) if v in self.UPGRADE_PATH.starting_meta.java_versions]
+            if available__starting_versions:
+                update_java_version(jvm_version=available__starting_versions[-1])
+            else:
+                raise AssertionError("No overlapping versions found between available_versions {} and starting_meta.java_versions {}"
                                     .format(available__starting_versions, self.UPGRADE_PATH.starting_meta.java_versions))
 
         self.install_nodetool_legacy_parsing()
@@ -119,6 +133,13 @@ class UpgradeTester(Tester, metaclass=ABCMeta):
 
         if extra_config_options:
             cluster.set_configuration_options(values=extra_config_options)
+
+        # XXX - improve when upgrade tests using authenticator|authorizer|role_manager are added and need values preserved/transformed
+        default_auth_values = {'authenticator': 'AllowAllAuthenticator', 'authorizer': 'AllowAllAuthorizer', 'role_manager': 'CassandraRoleManager'}
+        for option, supported_default_value in default_auth_values.items():
+            if option not in cluster._config_options or cluster._config_options[option] != supported_default_value:
+                logger.info("Setting {} from {} back to supported default of {}".format(option, cluster._config_options.get(option), supported_default_value))
+                cluster.set_configuration_options(values={option: supported_default_value})
 
         cluster.populate(nodes)
         cluster.start()
