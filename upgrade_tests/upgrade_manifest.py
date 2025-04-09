@@ -30,6 +30,13 @@ CASSANDRA_5_0 = '5.0'
 CASSANDRA_5_1 = '5.1'
 TRUNK = CASSANDRA_5_1
 
+CC4 = '4.0.11.'
+CC5 = '5.0.4.'
+
+DSE_5_1 = 'DSE 5.1'
+DSE_6_8 = 'DSE 6.8'
+DSE_6_9 = 'DSE 6.9'
+
 RUN_STATIC_UPGRADE_MATRIX = os.environ.get('RUN_STATIC_UPGRADE_MATRIX', '').lower() in ('yes', 'true')
 
 
@@ -90,7 +97,12 @@ def set_version_family():
         current_version = get_version_from_build(cassandra_dir)
 
     # TODO add a new item whenever Cassandra is branched
-    if current_version.vstring.startswith('2.0'):
+# FIXME dse versions
+    if current_version.vstring.startswith(CC4):
+        version_family = CC4
+    elif current_version.vstring.startswith(CC5):
+        version_family = CC5
+    elif current_version.vstring.startswith('2.0'):
         version_family = CASSANDRA_2_0
     elif current_version.vstring.startswith('2.1'):
         version_family = CASSANDRA_2_1
@@ -163,16 +175,27 @@ indev_2_2_x = VersionMeta(name='indev_2_2_x', family=CASSANDRA_2_2, variant='ind
 current_2_2_x = VersionMeta(name='current_2_2_x', family=CASSANDRA_2_2, variant='current', version='2.2.19', min_proto_v=1, max_proto_v=3, java_versions=(7, 8))
 
 indev_3_0_x = VersionMeta(name='indev_3_0_x', family=CASSANDRA_3_0, variant='indev', version='github:apache/cassandra-3.0', min_proto_v=3, max_proto_v=4, java_versions=(8,))
-current_3_0_x = VersionMeta(name='current_3_0_x', family=CASSANDRA_3_0, variant='current', version='3.0.30', min_proto_v=3, max_proto_v=4, java_versions=(8,))
+current_3_0_x = VersionMeta(name='current_3_0_x', family=CASSANDRA_3_0, variant='current', version='3.0.32', min_proto_v=3, max_proto_v=4, java_versions=(8,))
 
 indev_3_11_x = VersionMeta(name='indev_3_11_x', family=CASSANDRA_3_11, variant='indev', version='github:apache/cassandra-3.11', min_proto_v=3, max_proto_v=4, java_versions=(8,))
-current_3_11_x = VersionMeta(name='current_3_11_x', family=CASSANDRA_3_11, variant='current', version='3.11.17', min_proto_v=3, max_proto_v=4, java_versions=(8,))
+current_3_11_x = VersionMeta(name='current_3_11_x', family=CASSANDRA_3_11, variant='current', version='3.11.19', min_proto_v=3, max_proto_v=4, java_versions=(8,))
 
-indev_4_0_x = VersionMeta(name='indev_4_0_x', family=CASSANDRA_4_0, variant='indev', version='github:apache/cassandra-4.0', min_proto_v=3, max_proto_v=4, java_versions=(8,11))
-current_4_0_x = VersionMeta(name='current_4_0_x', family=CASSANDRA_4_0, variant='current', version='4.0.15', min_proto_v=4, max_proto_v=5, java_versions=(8,11))
+indev_dse_5_1 = VersionMeta(name='indev_dse_5_1', family=DSE_5_1, variant='indev', version='alias:bdp/5.1-dev', min_proto_v=3, max_proto_v=4, java_versions=(8,)) # FIXME also support proto_v=65 ("dse-v1")
+
+indev_4_0_x = VersionMeta(name='indev_4_0_x', family=CASSANDRA_4_0, variant='indev', version='github:apache/cassandra-4.0', min_proto_v=3, max_proto_v=5, java_versions=(8,11))
+current_4_0_x = VersionMeta(name='current_4_0_x', family=CASSANDRA_4_0, variant='current', version='4.0.17', min_proto_v=4, max_proto_v=5, java_versions=(8,11))
+
+indev_dse_6_8 = VersionMeta(name='indev_dse_6_8', family=DSE_6_8, variant='indev', version='alias:bdp/6.8-dev', min_proto_v=3, max_proto_v=4, java_versions=(8,)) # FIXME also support proto_v=65+66 ("dse-v1" and "dse-v2")
+indev_dse_6_9 = VersionMeta(name='indev_dse_6_9', family=DSE_6_8, variant='indev', version='alias:bdp/6.9-dev', min_proto_v=3, max_proto_v=5, java_versions=(11,)) # FIXME also support proto_v=65+66 ("dse-v1" and "dse-v2")
+
+indev_cc4 = VersionMeta(name='indev_cc4', family=CC4, variant='indev', version='github:datastax/main', min_proto_v=3, max_proto_v=4, java_versions=(11,))
+#current_hcd_1_2 = VersionMeta(name='current_hcd_1_2', family=HCD_1_2, variant='current', version='xxx', min_proto_v=4, max_proto_v=5, java_versions=(8,11))
+
+indev_cc5 = VersionMeta(name='indev_cc5', family=CC5, variant='indev', version='github:datastax/main-5.0', min_proto_v=4, max_proto_v=5, java_versions=(11,17,22))
+#current_hcd_2_0 = VersionMeta(name='current_hcd_2_0', family=HCD_2_0, variant='current', version='xxx', min_proto_v=4, max_proto_v=5, java_versions=(11,17))
 
 indev_4_1_x = VersionMeta(name='indev_4_1_x', family=CASSANDRA_4_1, variant='indev', version='github:apache/cassandra-4.1', min_proto_v=4, max_proto_v=5, java_versions=(8,11))
-current_4_1_x = VersionMeta(name='current_4_1_x', family=CASSANDRA_4_1, variant='current', version='4.1.7', min_proto_v=4, max_proto_v=5, java_versions=(8,11))
+current_4_1_x = VersionMeta(name='current_4_1_x', family=CASSANDRA_4_1, variant='current', version='4.1.8', min_proto_v=4, max_proto_v=5, java_versions=(8,11))
 
 indev_5_0_x = VersionMeta(name='indev_5_0_x', family=CASSANDRA_5_0, variant='indev', version='github:apache/cassandra-5.0', min_proto_v=4, max_proto_v=5, java_versions=(11,17))
 current_5_0_x = VersionMeta(name='current_5_0_x', family=CASSANDRA_5_0, variant='current', version='5.0.4', min_proto_v=4, max_proto_v=5, java_versions=(11,17))
@@ -193,19 +216,24 @@ indev_trunk = VersionMeta(name='indev_trunk', family=TRUNK, variant='indev', ver
 MANIFEST = {
     current_2_1_x: [indev_2_2_x, indev_3_0_x, indev_3_11_x],
     current_2_2_x: [indev_2_2_x, indev_3_0_x, indev_3_11_x],
-    current_3_0_x: [indev_3_0_x, indev_3_11_x, indev_4_0_x, indev_4_1_x],
-    current_3_11_x: [indev_3_11_x, indev_4_0_x, indev_4_1_x],
-    current_4_0_x:  [indev_4_0_x, indev_4_1_x, indev_5_0_x, indev_trunk],
+    current_3_0_x: [indev_3_0_x, indev_3_11_x, indev_4_0_x, indev_cc4, indev_4_1_x],
+    current_3_11_x: [indev_3_11_x, indev_4_0_x, indev_cc4, indev_4_1_x],
+    current_4_0_x:  [indev_4_0_x, indev_cc4, indev_4_1_x, indev_5_0_x, indev_trunk],
     current_4_1_x:  [indev_4_1_x, indev_5_0_x, indev_trunk],
     current_5_0_x:  [indev_5_0_x, indev_trunk],
 
     indev_2_1_x: [indev_2_2_x, indev_3_0_x, indev_3_11_x],
     indev_2_2_x: [indev_3_0_x, indev_3_11_x],
-    indev_3_0_x: [indev_3_11_x, indev_4_0_x, indev_4_1_x],
-    indev_3_11_x: [indev_4_0_x, indev_4_1_x],
-    indev_4_0_x:  [indev_4_1_x, indev_5_0_x, indev_trunk],
+    indev_3_0_x: [indev_3_11_x, indev_4_0_x, indev_cc4, indev_4_1_x],
+    indev_3_11_x: [indev_4_0_x, indev_cc4, indev_4_1_x],
+    indev_4_0_x:  [indev_cc4, indev_4_1_x, indev_5_0_x, indev_trunk],
     indev_4_1_x:  [indev_5_0_x, indev_trunk],
-    indev_5_0_x:  [indev_trunk]
+    indev_5_0_x:  [indev_trunk],
+
+    indev_dse_5_1: [indev_cc4],
+    indev_dse_6_8: [indev_cc4],
+    indev_dse_6_9: [indev_cc4]
+    #current_hcd_1_2: [indev_cc4]
 }
 
 def _have_common_proto(origin_meta, destination_meta):
@@ -238,9 +266,7 @@ def jdk_compatible_steps(version_metas):
         javan_home_defined = False
         for meta_java_version in version_meta.java_versions:
             javan_home_defined |= 'JAVA{}_HOME'.format(meta_java_version) in os.environ
-        # FIXME CNDB-10194 temporary hack to skip C* 5.0 when JAVA_HOME is JDK8 but JAVA11_HOME is also defined
-        if CURRENT_JAVA_VERSION in version_meta.java_versions:
-        # if CURRENT_JAVA_VERSION in version_meta.java_versions or javan_home_defined:
+        if CURRENT_JAVA_VERSION in version_meta.java_versions or javan_home_defined:
             metas.append(version_meta)
             if CURRENT_JAVA_VERSION in version_meta.java_versions:
                 included_current_jdk_versions.append(version_meta.version)
