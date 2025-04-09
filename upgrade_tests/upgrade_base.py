@@ -45,6 +45,7 @@ class UpgradeTester(Tester, metaclass=ABCMeta):
 
         fixture_dtest_setup.ignore_log_patterns = fixture_dtest_setup.ignore_log_patterns + [
             r'RejectedExecutionException.*ThreadPoolExecutor has shut down',  # see  CASSANDRA-12364
+            r'Collectd is only supported on Linux',
         ]
 
     @pytest.fixture(autouse=True)
@@ -115,7 +116,8 @@ class UpgradeTester(Tester, metaclass=ABCMeta):
 
         if extra_config_options:
             cluster.set_configuration_options(values=extra_config_options)
-
+            
+        cluster.set_configuration_options(values={'authenticator': 'AllowAllAuthenticator', 'authorizer': 'AllowAllAuthorizer', 'role_manager': 'CassandraRoleManager'})
         cluster.populate(nodes)
         cluster.start()
 
