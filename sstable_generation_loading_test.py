@@ -13,7 +13,7 @@ from ccmlib.node import ToolError
 from tools.misc import ImmutableMapping
 from dtest_setup_overrides import DTestSetupOverrides
 from dtest import Tester, create_ks, create_cf, mk_bman_path, MAJOR_VERSION_4, MAJOR_VERSION_5
-from tools.assertions import assert_all, assert_none, assert_one
+from tools.assertions import assert_all, assert_none, assert_one, assert_unavailable
 
 since = pytest.mark.since
 logger = logging.getLogger(__name__)
@@ -462,7 +462,7 @@ class TestSSTableGenerationAndLoadingLegacyIndex(BaseSStableLoaderTester):
         # Check that the index isn't marked as built and the old SSTable data has been loaded but not indexed
         assert_none(session, """SELECT * FROM system."IndexInfo" WHERE table_name='k'""")
         assert_all(session, "SELECT * FROM k.t", [[0, 1, 8], [0, 2, 8]])
-        assert_one(session, "SELECT * FROM k.t WHERE v = 8", [0, 2, 8])
+        assert_unavailable(session.execute, "SELECT * FROM k.t WHERE v = 8")
 
         # Restart the node to trigger index rebuild
         node.nodetool('drain')
