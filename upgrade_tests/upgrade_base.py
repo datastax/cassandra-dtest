@@ -9,10 +9,9 @@ import time
 
 from abc import ABCMeta
 
-from ccmlib import extension, repository
-from ccmlib.common import get_version_from_build, is_win
+from ccmlib.common import get_available_jdk_versions, get_jdk_version_int, get_version_from_build, is_win, update_java_version
 
-from .upgrade_manifest import CASSANDRA_4_0
+from .upgrade_manifest import CASSANDRA_4_0, get_cluster_class
 
 from dtest import Tester, create_ks
 
@@ -89,11 +88,16 @@ class UpgradeTester(Tester, metaclass=ABCMeta):
 
         cluster.set_install_dir(version=self.UPGRADE_PATH.starting_version)
 
-        install_dir_class = extension.get_cluster_class(cluster.get_install_dir())
-        if cluster.__class__ != install_dir_class:
-            logger.info("changing cluster type to {} (from {} bc {})".format(install_dir_class, cluster.__class__, cluster.get_install_dir()))
-            cluster.__class__ = install_dir_class
-            cluster._cassandra_version = cluster.dse_username = cluster.dse_password = None
+        self.reinit_cluster_for_family(self.UPGRADE_PATH.starting_meta)
+
+        # if current jdk is not compatible with starting_version, use the highest available JDK version that is
+        if get_jdk_version_int() not in self.UPGRADE_PATH.starting_meta.java_versions:
+            available__starting_versions = [v for v in get_available_jdk_versions(os.environ) if v in self.UPGRADE_PATH.starting_meta.java_versions]
+            if available__starting_versions:
+                update_java_version(jvm_version=available__starting_versions[-1])
+            else:
+                raise AssertionError("No overlapping versions found between available_versions {} and starting_meta.java_versions {}"
+                                    .format(available__starting_versions, self.UPGRADE_PATH.starting_meta.java_versions))
 
         self.install_nodetool_legacy_parsing()
         self.fixture_dtest_setup.reinitialize_cluster_for_different_version()
@@ -160,14 +164,10 @@ class UpgradeTester(Tester, metaclass=ABCMeta):
             node1.mark_log_for_errors()
 
         logger.debug('upgrading node1 to {}'.format(self.UPGRADE_PATH.upgrade_version))
-        (install_dir, _) = repository.setup(self.UPGRADE_PATH.upgrade_version)
-        install_dir_class = extension.get_cluster_class(install_dir)
-        if self.cluster.__class__ != install_dir_class:
-            logger.info("changing cluster type to {} (from {} bc {})".format(install_dir_class, self.cluster.__class__, install_dir))
-            self.cluster.__class__ = install_dir_class
-            self.cluster._cassandra_version = self.cluster.dse_username = self.cluster.dse_password = None
+
+        if self.reinit_cluster_for_family(self.UPGRADE_PATH.upgrade_meta):
             old_conf = node1.get_conf_dir()
-            node1.__class__ = install_dir_class.getNodeClass()
+            node1.__class__ = self.cluster.getNodeClass()
             shutil.copytree(old_conf, node1.get_conf_dir())
 
         node1.set_install_dir(version=self.UPGRADE_PATH.upgrade_version)
@@ -269,3 +269,13 @@ class UpgradeTester(Tester, metaclass=ABCMeta):
     def upgrade_is_version_4_or_greater(self):
         upgrade_version = LooseVersion(self.upgrade_version_family())
         return upgrade_version >= CASSANDRA_4_0
+
+    def reinit_cluster_for_family(self, meta):
+        meta_family_class = get_cluster_class(meta.family)
+        if self.cluster.__class__ != meta_family_class:
+            logger.info("changing cluster type to {} (from {} bc {})".format(meta_family_class, self.cluster.__class__, meta))
+            self.cluster.__class__ = meta_family_class
+            # todo – move to `Cluster.reinit()` (so subclasses can reinit their own fields)
+            self.cluster._cassandra_version = self.cluster.dse_username = self.cluster.dse_password = self.cluster.opscenter = None
+            return True
+        return False

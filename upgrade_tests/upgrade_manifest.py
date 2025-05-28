@@ -5,6 +5,7 @@ import os
 from collections import namedtuple
 
 import ccmlib.repository
+from ccmlib.cluster import Cluster
 from ccmlib.common import get_version_from_build, get_jdk_version_int
 
 from enum import Enum
@@ -31,6 +32,10 @@ CASSANDRA_5_1 = '5.1'
 TRUNK = CASSANDRA_5_1
 
 RUN_STATIC_UPGRADE_MATRIX = os.environ.get('RUN_STATIC_UPGRADE_MATRIX', '').lower() in ('yes', 'true')
+
+def get_cluster_class(family):
+    """ In this code repository we only support Apache Cassandra. """
+    return Cluster
 
 
 def is_same_family_current_to_indev(origin, destination):
