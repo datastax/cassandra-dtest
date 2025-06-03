@@ -46,7 +46,7 @@ class CqlshMixin():
 
     def verify_output(self, query, node, expected):
         cqlsh_options = ['-u', 'cassandra', '-p', 'cassandra']
-        if self.cluster.version() >= '4.1':
+        if self.cluster.version() >= '4.1' or self.is_cc4():
             cqlsh_options.append('--insecure-password-without-warning')
 
         output, err = self.run_cqlsh(node, query, cqlsh_options)
@@ -2527,7 +2527,7 @@ Tracing session:""")
         assert output_lines[-2].strip() == ''
         assert output_lines[-1].strip() == "({} rows)".format(num_rows)
 
-    @since('4.1')
+    @since('4.0')
     def test_passwd_warnings(self):
         config = {'authenticator': 'org.apache.cassandra.auth.PasswordAuthenticator'}
         self.cluster.set_configuration_options(values=config)
@@ -3003,7 +3003,7 @@ class TestCqlLogin(Tester, CqlshMixin):
         create_cf(self.session, 'ks1table')
         self.session.execute("CREATE USER user1 WITH PASSWORD 'changeme';")
         cqlsh_options = ['-u', 'cassandra', '-p', 'cassandra']
-        if self.cluster.version() >= '4.1':
+        if self.cluster.version() >= '4.1' or self.is_cc4():
             cqlsh_options.append('--insecure-password-without-warning')
         cqlsh_stdout, cqlsh_stderr, _ = self.node1.run_cqlsh(
             '''
@@ -3022,7 +3022,7 @@ class TestCqlLogin(Tester, CqlshMixin):
         self.session.execute("CREATE USER user1 WITH PASSWORD 'changeme';")
 
         cqlsh_options = ['-u', 'cassandra', '-p', 'cassandra']
-        if self.cluster.version() >= '4.1':
+        if self.cluster.version() >= '4.1' or self.is_cc4():
             cqlsh_options.append('--insecure-password-without-warning')
         cmd = "LOGIN user1 'badpass';"
         if self.cluster.version() >= LooseVersion('3.0'):
@@ -3041,7 +3041,7 @@ class TestCqlLogin(Tester, CqlshMixin):
         create_cf(self.session, 'ks1table')
         self.session.execute("CREATE USER user1 WITH PASSWORD 'changeme';")
         cqlsh_options = ['-u', 'cassandra', '-p', 'cassandra']
-        if self.cluster.version() >= '4.1':
+        if self.cluster.version() >= '4.1' or self.is_cc4():
             cqlsh_options.append('--insecure-password-without-warning')
 
         if self.cluster.version() >= LooseVersion('2.2'):
@@ -3086,7 +3086,7 @@ class TestCqlLogin(Tester, CqlshMixin):
             DESCRIBE TABLES;
             '''
         cqlsh_options = ['-u', 'cassandra', '-p', 'cassandra']
-        if self.cluster.version() >= '4.1':
+        if self.cluster.version() >= '4.1' or self.is_cc4():
             cqlsh_options.append('--insecure-password-without-warning')
         if self.cluster.version() >= LooseVersion('3.0'):
             cqlsh_stdout, cqlsh_stderr, _ = util.run_cqlsh_safe(self.node1,
@@ -3109,7 +3109,7 @@ class TestCqlLogin(Tester, CqlshMixin):
         Verifies that it is possible to list roles after a successful login.
         """
         cqlsh_options = ['-u', 'cassandra', '-p', 'cassandra']
-        if self.cluster.version() >= '4.1':
+        if self.cluster.version() >= '4.1' or self.is_cc4():
             cqlsh_options.append('--insecure-password-without-warning')
         out, err, _ = self.node1.run_cqlsh(
             '''
