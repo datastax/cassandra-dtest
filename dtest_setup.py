@@ -380,7 +380,10 @@ class DTestSetup(object):
         return cluster_version >= LooseVersion('4.0')
 
     def supports_cc4_guardrails(self):
-        """ Supports CC4 custom guardrails
+        return self.is_cc4()
+
+    def is_cc4(self):
+        """ Is this CC4
 
         If no nodes in the cluster to check for is_converged_core() then we just assume it is converged core.
         """
