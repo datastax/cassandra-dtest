@@ -390,6 +390,14 @@ class DTestSetup(object):
         return ((0 == len(self.cluster.nodelist()) or self.cluster.nodelist()[0].is_converged_core())
                 and self.cluster.version() >= LooseVersion('4.0') and self.cluster.version() < LooseVersion('5.0'))
 
+    def is_cc5(self):
+        """ Is this CC5
+
+        If there are nodes in the cluster, the first node is converged core and version 5.0.
+        """
+        return (0 < len(self.cluster.nodelist()) and self.cluster.nodelist()[0].is_converged_core()
+                and self.cluster.version() >= LooseVersion('5.0') and self.cluster.version() < LooseVersion('6.0'))
+
 
     def cleanup_last_test_dir(self):
         if os.path.exists(self.last_test_dir):
