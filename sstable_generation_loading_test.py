@@ -462,7 +462,10 @@ class TestSSTableGenerationAndLoadingLegacyIndex(BaseSStableLoaderTester):
         # Check that the index isn't marked as built and the old SSTable data has been loaded but not indexed
         assert_none(session, """SELECT * FROM system."IndexInfo" WHERE table_name='k'""")
         assert_all(session, "SELECT * FROM k.t", [[0, 1, 8], [0, 2, 8]])
-        assert_unavailable(session.execute, "SELECT * FROM k.t WHERE v = 8")
+        if self.is_cc5():
+            assert_unavailable(session.execute, "SELECT * FROM k.t WHERE v = 8")
+        else:
+            assert_one(session, "SELECT * FROM k.t WHERE v = 8", [0, 2, 8])
 
         # Restart the node to trigger index rebuild
         node.nodetool('drain')
