@@ -2187,9 +2187,17 @@ Tracing session:""")
         logger.debug(fut.warnings)
         assert fut.warnings is not None
         assert 1 == len(fut.warnings)
-        expected_fut_warning = ("Guardrail unlogged_batch_across_partitions violated: Unlogged batch covering {} partitions detected against table [client_warnings.test]. " +
-                                "You should use a logged batch for atomicity, or asynchronous writes for performance.") \
-                                .format(max_partitions_per_batch + 1)
+        if self.is_cc5():
+            expected_fut_warning = (
+                        "Guardrail unlogged_batch_across_partitions violated: Unlogged batch covering {} partitions detected against table [client_warnings.test]. " +
+                        "You should use a logged batch for atomicity, or asynchronous writes for performance.") \
+                .format(max_partitions_per_batch + 1)
+        else:
+            expected_fut_warning = (
+                    "Unlogged batch covering {} partitions detected against table [client_warnings.test]. " +
+                    "You should use a logged batch for atomicity, or asynchronous writes for performance.") \
+                .format(max_partitions_per_batch + 1)
+
         assert expected_fut_warning == fut.warnings[0]
 
     def test_connect_timeout(self):
