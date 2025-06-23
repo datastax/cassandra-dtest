@@ -1542,6 +1542,9 @@ CREATE TYPE test.address_type (
 
     def get_users_by_state_mv_output(self):
         if self.cluster.version() >= LooseVersion('4.2'):
+            compaction = self.get_compaction() if self.is_cc5() else (
+                "AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', "
+                "'max_threshold': '32', 'min_threshold': '4'}")
             return """
                 CREATE MATERIALIZED VIEW test.users_by_state AS
                 SELECT *
@@ -1567,7 +1570,7 @@ CREATE TYPE test.address_type (
                 AND min_index_interval = 128
                 AND read_repair = 'BLOCKING'
                 AND speculative_retry = '99p';
-               """ % self.get_compaction() 
+               """ % compaction
         elif self.cluster.version() >= LooseVersion('4.1'):
             return """
                 CREATE MATERIALIZED VIEW test.users_by_state AS
@@ -1594,6 +1597,10 @@ CREATE TYPE test.address_type (
                 AND speculative_retry = '99p';
                """
         elif self.cluster.version() >= LooseVersion('4.0'):
+            compaction = self.get_compaction() if self.is_cc4() else (
+                "AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', "
+                "'max_threshold': '32', 'min_threshold': '4'}")
+            memtable = "AND memtable = {}" if self.is_cc4() else ""
             return """
                 CREATE MATERIALIZED VIEW test.users_by_state AS
                 SELECT *
@@ -1606,9 +1613,9 @@ CREATE TYPE test.address_type (
                 AND caching = {'keys': 'ALL', 'rows_per_partition': 'NONE'}
                 AND cdc = false
                 AND comment = ''
-                AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', 'max_threshold': '32', 'min_threshold': '4'}
+                %s
                 AND compression = {'chunk_length_in_kb': '16', 'class': 'org.apache.cassandra.io.compress.LZ4Compressor'}
-                AND memtable = {}
+                %s
                 AND crc_check_chance = 1.0
                 AND extensions = {}
                 AND gc_grace_seconds = 864000
@@ -1617,7 +1624,7 @@ CREATE TYPE test.address_type (
                 AND min_index_interval = 128
                 AND read_repair = 'BLOCKING'
                 AND speculative_retry = '99p';
-               """
+               """ % (compaction, memtable)
         elif self.cluster.version() >= LooseVersion('3.9'):
             return """
                 CREATE MATERIALIZED VIEW test.users_by_state AS
