@@ -2109,7 +2109,7 @@ CREATE TABLE datetime_checks.values (
 
         if self.cluster.version() >= LooseVersion('5.0'):
             # See CASSANDRA-18547
-            self.verify_output("use tracing_checks; tracing on; select * from test", node1, """{}.
+            self.verify_output("use tracing_checks; tracing on; select * from test", node1, """{}
 
  id | val
 ----+-------
@@ -2118,9 +2118,9 @@ CREATE TABLE datetime_checks.values (
   3 | iuiou
 
 (3 rows)
-""".format('Tracing set to FULL' if node1.is_converged_core() else 'Tracing set to ON'))
+""".format('Tracing set to FULL.' if node1.is_converged_core() else 'TRACING set to ON'))
         else:
-            self.verify_output("use tracing_checks; tracing on; select * from test", node1, """Now Tracing is enabled
+            self.verify_output("use tracing_checks; tracing on; select * from test", node1, """{}
 
  id | val
 ----+-------
@@ -2130,7 +2130,7 @@ CREATE TABLE datetime_checks.values (
 
 (3 rows)
 
-Tracing session:""")
+Tracing session:""".format('Tracing set to FULL.' if node1.is_converged_core() else 'Now Tracing is enabled'))
 
     @since('2.2')
     def test_client_warnings(self):
