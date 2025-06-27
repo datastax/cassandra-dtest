@@ -130,7 +130,7 @@ class TestCqlsh(Tester, CqlshMixin):
         super(TestCqlsh, self).tearDown()
 
 
-    def get_compaction(self):
+    def get_cc_compaction(self):
         # CC uses UCS by default
         cc_ucs = "AND compaction = {'class': 'org.apache.cassandra.db.compaction.UnifiedCompactionStrategy'}"
         if self.dtest_config.latest_config:
@@ -1192,6 +1192,9 @@ CREATE TYPE test.address_type (
                 """
 
         if self.cluster.cassandra_version() >= LooseVersion('5.1'):
+            compaction = self.get_cc_compaction() if self.is_cc5() else (
+                "AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', "
+                "'max_threshold': '32', 'min_threshold': '4'}")
             create_table += """
         ) WITH CLUSTERING ORDER BY (col ASC)
             AND additional_write_policy = '99p'
@@ -1216,8 +1219,11 @@ CREATE TYPE test.address_type (
             AND transactional_mode = 'off'
             AND transactional_migration_from = 'none'
             AND speculative_retry = '99p';
-        """ % self.get_compaction()
+        """ % compaction
         elif self.cluster.version() >= LooseVersion('4.2'):
+            compaction = self.get_cc_compaction() if self.is_cc5() else (
+                "AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', "
+                "'max_threshold': '32', 'min_threshold': '4'}")
             create_table += """
         ) WITH CLUSTERING ORDER BY (col ASC)
             AND additional_write_policy = '99p'
@@ -1239,7 +1245,7 @@ CREATE TYPE test.address_type (
             AND min_index_interval = 128
             AND read_repair = 'BLOCKING'
             AND speculative_retry = '99p';
-        """ % self.get_compaction()
+        """ % compaction
         elif self.cluster.version() >= LooseVersion('4.1'):
             create_table += """
         ) WITH CLUSTERING ORDER BY (col ASC)
@@ -1262,6 +1268,10 @@ CREATE TYPE test.address_type (
             AND speculative_retry = '99p';
         """
         elif self.cluster.version() >= LooseVersion('4.0'):
+            compaction = self.get_cc_compaction() if self.is_cc4() else (
+                "AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', "
+                "'max_threshold': '32', 'min_threshold': '4'}")
+            memtable = "AND memtable = {}" if self.is_cc4() else ""
             create_table += """
         ) WITH CLUSTERING ORDER BY (col ASC)
             AND additional_write_policy = '99p'
@@ -1269,9 +1279,9 @@ CREATE TYPE test.address_type (
             AND caching = {'keys': 'ALL', 'rows_per_partition': 'NONE'}
             AND cdc = false
             AND comment = ''
-            AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', 'max_threshold': '32', 'min_threshold': '4'}
+            %s
             AND compression = {'chunk_length_in_kb': '16', 'class': 'org.apache.cassandra.io.compress.LZ4Compressor'}
-            AND memtable = {}
+            %s
             AND crc_check_chance = 1.0
             AND default_time_to_live = 0
             AND extensions = {}
@@ -1281,7 +1291,8 @@ CREATE TYPE test.address_type (
             AND min_index_interval = 128
             AND read_repair = 'BLOCKING'
             AND speculative_retry = '99p';
-        """
+        """ % (compaction, memtable)
+
         elif self.cluster.version() >= LooseVersion('3.9'):
             create_table += """
         ) WITH CLUSTERING ORDER BY (col ASC)
@@ -1348,6 +1359,9 @@ CREATE TYPE test.address_type (
         create_table = None
 
         if self.cluster.version() >= LooseVersion('5.1'):
+            compaction = self.get_cc_compaction() if self.is_cc5() else (
+                "AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', "
+                "'max_threshold': '32', 'min_threshold': '4'}")
             create_table = """
         CREATE TABLE test.users (
             userid text PRIMARY KEY,
@@ -1376,8 +1390,11 @@ CREATE TYPE test.address_type (
             AND transactional_mogit -c rerere.enabled=falsede = 'off'
             AND transactional_migration_from = 'none'
             AND speculative_retry = '99p';
-        """ % self.get_compaction()
+        """ % compaction
         elif self.cluster.version() >= LooseVersion('4.2'):
+            compaction = self.get_cc_compaction() if self.is_cc5() else (
+                "AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', "
+                "'max_threshold': '32', 'min_threshold': '4'}")
             create_table = """
         CREATE TABLE test.users (
             userid text PRIMARY KEY,
@@ -1403,7 +1420,7 @@ CREATE TYPE test.address_type (
             AND min_index_interval = 128
             AND read_repair = 'BLOCKING'
             AND speculative_retry = '99p';
-        """ % self.get_compaction()
+        """ % compaction
         elif self.cluster.version() >= LooseVersion('4.1'):
             create_table = """
         CREATE TABLE test.users (
@@ -1430,6 +1447,10 @@ CREATE TYPE test.address_type (
             AND speculative_retry = '99p';
         """
         elif self.cluster.version() >= LooseVersion('4.0'):
+            compaction = self.get_cc_compaction() if self.is_cc4() else (
+                "AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', "
+                "'max_threshold': '32', 'min_threshold': '4'}")
+            memtable = "AND memtable = {}" if self.is_cc4() else ""
             create_table = """
         CREATE TABLE test.users (
             userid text PRIMARY KEY,
@@ -1441,9 +1462,9 @@ CREATE TYPE test.address_type (
             AND caching = {'keys': 'ALL', 'rows_per_partition': 'NONE'}
             AND cdc = false
             AND comment = ''
-            AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', 'max_threshold': '32', 'min_threshold': '4'}
+            %s
             AND compression = {'chunk_length_in_kb': '16', 'class': 'org.apache.cassandra.io.compress.LZ4Compressor'}
-            AND memtable = {}
+            %s
             AND crc_check_chance = 1.0
             AND default_time_to_live = 0
             AND extensions = {}
@@ -1453,7 +1474,7 @@ CREATE TYPE test.address_type (
             AND min_index_interval = 128
             AND read_repair = 'BLOCKING'
             AND speculative_retry = '99p';
-        """
+        """ % (compaction, memtable)
         elif self.cluster.version() >= LooseVersion('3.9'):
             create_table =  """
         CREATE TABLE test.users (
@@ -1542,7 +1563,7 @@ CREATE TYPE test.address_type (
 
     def get_users_by_state_mv_output(self):
         if self.cluster.version() >= LooseVersion('4.2'):
-            compaction = self.get_compaction() if self.is_cc5() else (
+            compaction = self.get_cc_compaction() if self.is_cc5() else (
                 "AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', "
                 "'max_threshold': '32', 'min_threshold': '4'}")
             return """
@@ -1597,7 +1618,7 @@ CREATE TYPE test.address_type (
                 AND speculative_retry = '99p';
                """
         elif self.cluster.version() >= LooseVersion('4.0'):
-            compaction = self.get_compaction() if self.is_cc4() else (
+            compaction = self.get_cc_compaction() if self.is_cc4() else (
                 "AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', "
                 "'max_threshold': '32', 'min_threshold': '4'}")
             memtable = "AND memtable = {}" if self.is_cc4() else ""
