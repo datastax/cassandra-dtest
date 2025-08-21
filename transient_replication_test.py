@@ -17,6 +17,10 @@ from tools.assertions import (assert_all)
 from cassandra.metadata import Murmur3Token, OrderedDict
 import pytest
 
+# note, this only works in dtests as the `cassandra.testtag` is otherwise not used.
+# ref: StartupChecks.java , CassandraBriefJUnitResultFormatter.java and CassandraXMLJUnitResultFormatter.java
+TRANSIENT_REPLICATION_TEST_ENABLED_JVM_ARG = "-Dcassandra.testtag=enable_transient_replication"
+
 since = pytest.mark.since
 
 logging.getLogger('cassandra').setLevel(logging.CRITICAL)
@@ -174,6 +178,7 @@ class TransientReplicationBase(Tester):
         return False
 
     def populate(self):
+        self.cluster.data_dir_count = 1
         self.cluster.populate(3, tokens=self.tokens, debug=True, install_byteman=True)
 
     def set_nodes(self):
@@ -206,7 +211,8 @@ class TransientReplicationBase(Tester):
                                                        'enable_transient_replication': True,
                                                        'dynamic_snitch': False})
         self.populate()
-        self.cluster.start()
+        # converged core need this sys prop set, otherwise it fails startup as transient rep is not supported
+        self.cluster.start(jvm_args=[TRANSIENT_REPLICATION_TEST_ENABLED_JVM_ARG])
 
         self.nodes = [patch_start(node) for node in self.cluster.nodelist()]
         self.set_nodes()

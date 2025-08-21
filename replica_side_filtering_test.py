@@ -6,6 +6,7 @@ from cassandra.query import SimpleStatement
 
 from dtest import Tester, create_ks, mk_bman_path
 from tools.assertions import (assert_all, assert_none, assert_one)
+from transient_replication_test import TRANSIENT_REPLICATION_TEST_ENABLED_JVM_ARG
 
 since = pytest.mark.since
 keyspace = 'ks'
@@ -526,7 +527,8 @@ class TestAllowFiltering(ReplicaSideFiltering):
         cluster.set_batch_commitlog(enabled=True, use_batch_window = cluster.version() < '5.0')
         cluster.populate(2, tokens=[0, 1], debug=True, install_byteman=True)
         node1, node2 = cluster.nodelist()
-        cluster.start()
+        # converged core need this sys prop set, otherwise it fails startup as transient rep is not supported
+        cluster.start(jvm_args=[TRANSIENT_REPLICATION_TEST_ENABLED_JVM_ARG])
 
         self.session = self.patient_exclusive_cql_connection(node1, consistency_level=CL.ALL)
         self.session.execute("CREATE KEYSPACE %s WITH replication = "
