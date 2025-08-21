@@ -74,7 +74,7 @@ class TestCqlTracing(Tester):
             # See CASSANDRA-18547
             assert ('Tracing set to FULL.\n' if node1.is_converged_core() else 'Tracing set to ON.\n') in out
         else:
-            assert 'Tracing is enabled' in out
+            assert 'Tracing set to FULL.' if node1.is_converged_core() else 'Tracing is enabled' in out
 
         out, err, _ = node1.run_cqlsh('TRACING ON; SELECT * from system.peers')
         assert 'Tracing session: ' in out
