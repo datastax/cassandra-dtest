@@ -168,19 +168,19 @@ indev_2_2_x = VersionMeta(name='indev_2_2_x', family=CASSANDRA_2_2, variant='ind
 current_2_2_x = VersionMeta(name='current_2_2_x', family=CASSANDRA_2_2, variant='current', version='2.2.19', min_proto_v=1, max_proto_v=3, java_versions=(7, 8))
 
 indev_3_0_x = VersionMeta(name='indev_3_0_x', family=CASSANDRA_3_0, variant='indev', version='github:apache/cassandra-3.0', min_proto_v=3, max_proto_v=4, java_versions=(8,))
-current_3_0_x = VersionMeta(name='current_3_0_x', family=CASSANDRA_3_0, variant='current', version='3.0.30', min_proto_v=3, max_proto_v=4, java_versions=(8,))
+current_3_0_x = VersionMeta(name='current_3_0_x', family=CASSANDRA_3_0, variant='current', version='3.0.32', min_proto_v=3, max_proto_v=4, java_versions=(8,))
 
 indev_3_11_x = VersionMeta(name='indev_3_11_x', family=CASSANDRA_3_11, variant='indev', version='github:apache/cassandra-3.11', min_proto_v=3, max_proto_v=4, java_versions=(8,))
-current_3_11_x = VersionMeta(name='current_3_11_x', family=CASSANDRA_3_11, variant='current', version='3.11.17', min_proto_v=3, max_proto_v=4, java_versions=(8,))
+current_3_11_x = VersionMeta(name='current_3_11_x', family=CASSANDRA_3_11, variant='current', version='3.11.19', min_proto_v=3, max_proto_v=4, java_versions=(8,))
 
 indev_4_0_x = VersionMeta(name='indev_4_0_x', family=CASSANDRA_4_0, variant='indev', version='github:apache/cassandra-4.0', min_proto_v=3, max_proto_v=4, java_versions=(8,11))
-current_4_0_x = VersionMeta(name='current_4_0_x', family=CASSANDRA_4_0, variant='current', version='4.0.18', min_proto_v=4, max_proto_v=5, java_versions=(8,11))
+current_4_0_x = VersionMeta(name='current_4_0_x', family=CASSANDRA_4_0, variant='current', version='4.0.19', min_proto_v=4, max_proto_v=5, java_versions=(8,11))
 
 indev_4_1_x = VersionMeta(name='indev_4_1_x', family=CASSANDRA_4_1, variant='indev', version='github:apache/cassandra-4.1', min_proto_v=4, max_proto_v=5, java_versions=(8,11))
-current_4_1_x = VersionMeta(name='current_4_1_x', family=CASSANDRA_4_1, variant='current', version='4.1.9', min_proto_v=4, max_proto_v=5, java_versions=(8,11))
+current_4_1_x = VersionMeta(name='current_4_1_x', family=CASSANDRA_4_1, variant='current', version='4.1.10', min_proto_v=4, max_proto_v=5, java_versions=(8,11))
 
 indev_5_0_x = VersionMeta(name='indev_5_0_x', family=CASSANDRA_5_0, variant='indev', version='github:apache/cassandra-5.0', min_proto_v=4, max_proto_v=5, java_versions=(11,17))
-current_5_0_x = VersionMeta(name='current_5_0_x', family=CASSANDRA_5_0, variant='current', version='5.0.4', min_proto_v=4, max_proto_v=5, java_versions=(11,17))
+current_5_0_x = VersionMeta(name='current_5_0_x', family=CASSANDRA_5_0, variant='current', version='5.0.6', min_proto_v=4, max_proto_v=5, java_versions=(11,17))
 
 indev_trunk = VersionMeta(name='indev_trunk', family=TRUNK, variant='indev', version='github:apache/trunk', min_proto_v=4, max_proto_v=5, java_versions=(11,17))
 # TODO – add current_5_1_x when this gets uncommented (when 5.1-alpha1 is released)
