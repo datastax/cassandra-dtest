@@ -9,7 +9,8 @@ from tools import sslkeygen
 from dtest import Tester
 from cassandra.protocol import SyntaxException, ConfigurationException
 
-from upgrade_tests.upgrade_manifest import current_dse_6_9
+from tools.misc import generate_ssl_stores
+from upgrade_tests.upgrade_manifest import get_cluster_class, indev_dse_6_9, indev_cc4
 
 since = pytest.mark.since
 logger = logging.getLogger(__name__)
@@ -18,6 +19,13 @@ logger = logging.getLogger(__name__)
 # @pytest.mark.upgrade_test
 @since('4.0')
 class TestUpgradeWithInternodeEncryption(Tester):
+
+    @pytest.fixture(autouse=True)
+    def fixture_add_additional_log_patterns(self, fixture_dtest_setup):
+        fixture_dtest_setup.ignore_log_patterns = fixture_dtest_setup.ignore_log_patterns + [
+            r'Collectd is only supported on Linux',
+        ]
+
     def upgrade_to_version(self, tag, start_rpc=True, wait=True, nodes=None):
         logger.debug('Upgrading to ' + tag)
         if nodes is None:
@@ -46,51 +54,43 @@ class TestUpgradeWithInternodeEncryption(Tester):
         credNode2 = sslkeygen.generate_credentials("127.0.0.2", credNode1.cakeystore, credNode1.cacert)
         credNode3 = sslkeygen.generate_credentials("127.0.0.3", credNode1.cakeystore, credNode1.cacert)
 
-        self.setup_nodes(current_dse_6_9.version, credNode1, credNode2, credNode3, encryption_optional=False)
+        cluster = self.setup_nodes(indev_dse_6_9.version, credNode1, credNode2, credNode3, encryption_optional=False)
+        cluster.start()
 
-        self.cluster.start()
+        node1 = cluster.nodelist()[0]
+        node1.stop(wait_other_notice=True)
 
-    def setup_nodes(self, version, credentials1, credentials2, credentials3, endpoint_verification=False,
-                    client_auth=False, internode_encryption='all', encryption_optional=None):
+        meta_family_class = get_cluster_class(indev_cc4.family)
+        cluster.__class__ = meta_family_class
+        cluster._cassandra_version = self.cluster.dse_username = self.cluster.dse_password = self.cluster.opscenter = None
+
+        old_conf = node1.get_conf_dir()
+        node1.__class__ = cluster.getNodeClass()
+        shutil.copytree(old_conf, node1.get_conf_dir())
+
+        node1.set_install_dir(version=indev_cc4.version)
+
+        self.install_legacy_parsing(node1)
+
+        node1.start(wait_for_binary_proto=True)
+
+
+    def setup_nodes(self, version):
         cluster = self.cluster
 
+        meta_family_class = get_cluster_class(indev_dse_6_9.family)
+        self.cluster.__class__ = meta_family_class
+        self.cluster._cassandra_version = self.cluster.dse_username = self.cluster.dse_password = self.cluster.opscenter = None
+
         cluster.set_install_dir(version=version)
+
+        cluster.set_configuration_options(values={'endpoint_snitch': 'org.apache.cassandra.locator.SimpleSnitch'})
+
+        generate_ssl_stores(self.fixture_dtest_setup.test_path)
+        self.cluster.enable_internode_ssl(self.fixture_dtest_setup.test_path, enable_legacy_ssl_storage_port=True)
+
         self.fixture_dtest_setup.reinitialize_cluster_for_different_version()
+        self.install_nodetool_legacy_parsing()
 
         cluster = cluster.populate(3)
-        self.node1 = cluster.nodelist()[0]
-        self.copy_cred(credentials1, self.node1, internode_encryption, encryption_optional, endpoint_verification,
-                       client_auth)
-
-        self.node2 = cluster.nodelist()[1]
-        self.copy_cred(credentials2, self.node2, internode_encryption, encryption_optional, endpoint_verification,
-                       client_auth)
-
-        self.node3 = cluster.nodelist()[2]
-        self.copy_cred(credentials3, self.node3, internode_encryption, encryption_optional, endpoint_verification,
-                       client_auth)
-
-    def copy_cred(self, credentials, node, internode_encryption, encryption_optional, endpoint_verification=False,
-                  client_auth=False):
-        dir = node.get_conf_dir()
-        kspath = os.path.join(dir, 'keystore.jks')
-        tspath = os.path.join(dir, 'truststore.jks')
-        shutil.copyfile(credentials.keystore, kspath)
-        shutil.copyfile(credentials.cakeystore, tspath)
-
-        server_enc_options = {
-            'internode_encryption': internode_encryption,
-            'keystore': kspath,
-            'keystore_password': 'cassandra',
-            'truststore': tspath,
-            'truststore_password': 'cassandra',
-            'require_endpoint_verification': endpoint_verification,
-            'require_client_auth': client_auth,
-        }
-
-        if self.cluster.version() >= '4.0' and encryption_optional is not None:
-            server_enc_options['optional'] = encryption_optional
-
-        node.set_configuration_options(values={
-            'server_encryption_options': server_enc_options
-        })
+        return cluster
