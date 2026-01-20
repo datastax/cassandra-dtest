@@ -212,15 +212,15 @@ indev_3_11_x = VersionMeta(name='indev_3_11_x', family=CASSANDRA_3_11, variant='
 current_3_11_x = VersionMeta(name='current_3_11_x', family=CASSANDRA_3_11, variant='current', version='3.11.19', min_proto_v=3, max_proto_v=4, java_versions=(8,))
 
 indev_dse_5_1 = VersionMeta(name='indev_dse_5_1', family=DSE_5_1, variant='indev', version='alias:bdp/5.1-dev', min_proto_v=3, max_proto_v=4, java_versions=(8,)) # FIXME also support proto_v=65 ("dse-v1")
-current_dse_5_1 = VersionMeta(name='current_dse_5_1', family=DSE_5_1, variant='current', version='5.1.48', min_proto_v=3, max_proto_v=4, java_versions=(8,)) # FIXME also support proto_v=65 ("dse-v1")
+current_dse_5_1 = VersionMeta(name='current_dse_5_1', family=DSE_5_1, variant='current', version='5.1.49', min_proto_v=3, max_proto_v=4, java_versions=(8,)) # FIXME also support proto_v=65 ("dse-v1")
 
 indev_4_0_x = VersionMeta(name='indev_4_0_x', family=CASSANDRA_4_0, variant='indev', version='github:apache/cassandra-4.0', min_proto_v=3, max_proto_v=5, java_versions=(8,11))
 current_4_0_x = VersionMeta(name='current_4_0_x', family=CASSANDRA_4_0, variant='current', version='4.0.17', min_proto_v=4, max_proto_v=5, java_versions=(8,11))
 
 indev_dse_6_8 = VersionMeta(name='indev_dse_6_8', family=DSE_6_8, variant='indev', version='alias:bdp/6.8-dev', min_proto_v=3, max_proto_v=4, java_versions=(8,)) # FIXME also support proto_v=65+66 ("dse-v1" and "dse-v2")
-current_dse_6_8 = VersionMeta(name='current_dse_6_8', family=DSE_6_8, variant='current', version='6.8.61', min_proto_v=3, max_proto_v=4, java_versions=(8,)) # FIXME also support proto_v=65+66 ("dse-v1" and "dse-v2")
+current_dse_6_8 = VersionMeta(name='current_dse_6_8', family=DSE_6_8, variant='current', version='6.8.62', min_proto_v=3, max_proto_v=4, java_versions=(8,)) # FIXME also support proto_v=65+66 ("dse-v1" and "dse-v2")
 indev_dse_6_9 = VersionMeta(name='indev_dse_6_9', family=DSE_6_8, variant='indev', version='alias:bdp/6.9-dev', min_proto_v=3, max_proto_v=4, java_versions=(11,)) # FIXME also support proto_v=65+66 ("dse-v1" and "dse-v2")
-current_dse_6_9 = VersionMeta(name='current_dse_6_9', family=DSE_6_8, variant='current', version='6.9.17', min_proto_v=3, max_proto_v=4, java_versions=(11,)) # FIXME also support proto_v=65+66 ("dse-v1" and "dse-v2")
+current_dse_6_9 = VersionMeta(name='current_dse_6_9', family=DSE_6_8, variant='current', version='6.9.18', min_proto_v=3, max_proto_v=4, java_versions=(11,)) # FIXME also support proto_v=65+66 ("dse-v1" and "dse-v2")
 
 indev_cc4 = VersionMeta(name='indev_cc4', family=CC4, variant='indev', version='github:datastax/main', min_proto_v=3, max_proto_v=4, java_versions=(11,))
 # TODO - HCD-128
