@@ -7,6 +7,7 @@ import pprint
 import pytest
 import psutil
 import random
+import shutil
 import signal
 import time
 import uuid
@@ -25,12 +26,13 @@ from .upgrade_manifest import (build_upgrade_pairs, jdk_compatible_steps, curren
                                current_4_0_x, current_4_1_x, current_5_0_x,
                                indev_trunk,
                                CASSANDRA_4_0, CASSANDRA_5_0,
-                               CC4, CC5,
+                               CC4, CC5, HCD_1, HCD_2,
+                               get_cluster_class,
                                RUN_STATIC_UPGRADE_MATRIX, CURRENT_JAVA_VERSION)
 
 logger = logging.getLogger(__name__)
 
-CC_FAMILIES = (CC4, CC5)
+CC_FAMILIES = (CC4, CC5, HCD_1, HCD_2)
 
 
 def data_writer(tester, to_verify_queue, verification_done_queue, rewrite_probability=0):
@@ -359,6 +361,15 @@ class TestUpgrade(Tester):
             r'Invalid memtable configuration.*in schema\. Falling back to default',
         )
 
+    def reinit_cluster_for_family(self, meta):
+        meta_family_class = get_cluster_class(meta.family)
+        if self.cluster.__class__ != meta_family_class:
+            logger.info("changing cluster type to {} (from {} bc {})".format(meta_family_class, self.cluster.__class__, meta))
+            self.cluster.__class__ = meta_family_class
+            self.cluster._cassandra_version = None
+            return True
+        return False
+
     def prepare(self):
         if type(self).__name__ == "TestUpgrade":
             pytest.skip("Skip base class, only generated classes run the tests")
@@ -369,6 +380,7 @@ class TestUpgrade(Tester):
         logger.debug("Upgrade test beginning, setting CASSANDRA_VERSION to {}, and jdk to {}. (Prior values will be restored after test)."
               .format(self.test_version_metas[0].version, self.test_version_metas[0].java_version))
         cluster = self.cluster
+        self.reinit_cluster_for_family(self.test_version_metas[0])
         cluster.set_install_dir(version=self.test_version_metas[0].version)
         self.install_nodetool_legacy_parsing()
         self.fixture_dtest_setup.reinitialize_cluster_for_different_version()
@@ -566,7 +578,14 @@ class TestUpgrade(Tester):
             node.watch_log_for("DRAINED")
             node.stop(wait_other_notice=False)
 
+        family_changed = self.reinit_cluster_for_family(version_meta)
         for node in nodes:
+            if family_changed:
+                old_conf = node.get_conf_dir()
+                node.__class__ = self.cluster.getNodeClass()
+                new_conf = node.get_conf_dir()
+                if old_conf != new_conf and os.path.exists(old_conf) and not os.path.exists(new_conf):
+                    shutil.copytree(old_conf, new_conf)
             node.set_install_dir(version=version_meta.version)
             self.install_legacy_parsing(node)
             logger.debug("Set new cassandra dir for %s: %s" % (node.name, node.get_install_dir()))
