@@ -263,6 +263,8 @@ MANIFEST = {
     indev_4_1_x:  [indev_5_0_x, indev_cc5, indev_trunk],
     indev_5_0_x:  [indev_cc5, indev_trunk],
 
+    indev_cc4:    [indev_cc5],
+
     #indev_dse_5_1: [indev_cc4], # FIXME HCD-149
     current_dse_5_1: [indev_cc4],
     #indev_dse_6_8: [indev_cc4, indev_cc5], # FIXME HCD-149

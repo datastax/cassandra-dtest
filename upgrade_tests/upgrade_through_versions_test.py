@@ -25,9 +25,12 @@ from .upgrade_manifest import (build_upgrade_pairs, jdk_compatible_steps, curren
                                current_4_0_x, current_4_1_x, current_5_0_x,
                                indev_trunk,
                                CASSANDRA_4_0, CASSANDRA_5_0,
+                               CC4, CC5,
                                RUN_STATIC_UPGRADE_MATRIX, CURRENT_JAVA_VERSION)
 
 logger = logging.getLogger(__name__)
+
+CC_FAMILIES = (CC4, CC5)
 
 
 def data_writer(tester, to_verify_queue, verification_done_queue, rewrite_probability=0):
@@ -352,6 +355,8 @@ class TestUpgrade(Tester):
             r'Got slice command for nonexistent table system_auth.roles',
             # file may be read while being written; will be read again when done (CASSANDRA-17749)
             r'Snitch definitions at cassandra-topology.properties do not define a location',
+            # CC4->CC5 upgrade: CC5 reads CC4 memtable config that doesn't match; falls back to default safely
+            r'Invalid memtable configuration.*in schema\. Falling back to default',
         )
 
     def prepare(self):
@@ -414,7 +419,10 @@ class TestUpgrade(Tester):
             self.prepare()
         self.row_values = set()
         cluster = self.cluster
-        if cluster.version() >= '5.0':
+        is_cc = self.test_version_metas[0].family in CC_FAMILIES
+        if is_cc:
+            pass  # CC removed all UDF config options
+        elif cluster.version() >= '5.0':
             cluster.set_configuration_options({'user_defined_functions_threads_enabled': 'true',
                                                'scripted_user_defined_functions_enabled': 'false'})
         elif cluster.version() >= '3.0':
@@ -851,7 +859,10 @@ class BootstrapMixin(object):
         self.prepare()
         cluster = self.cluster
 
-        if cluster.version() >= '5.0':
+        is_cc = self.test_version_metas[0].family in CC_FAMILIES
+        if is_cc:
+            pass  # CC removed all UDF config options
+        elif cluster.version() >= '5.0':
             cluster.set_configuration_options({'user_defined_functions_threads_enabled': 'true',
                                                'scripted_user_defined_functions_enabled': 'false'})
         elif cluster.version() >= '3.0':
