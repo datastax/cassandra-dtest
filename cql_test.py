@@ -1510,6 +1510,27 @@ class TestCQLSlowQuery(CQLTester):
                                           logged_query="SELECT mp\[1\], st\[0\], v FROM ks.{}")
 
     @staticmethod
+    def _redact_logged_query(logged_query):
+        """Transform a logged_query regex pattern to match redacted CQL strings,
+        where user-provided values are replaced with '?' in the server logs."""
+
+        # Replace literal values after comparison operators (=, >, <, >=, <=)
+        result = re.sub(r'(?<=[<>=] )\d+', r'\\?', logged_query)
+
+        # Handle IN clause values like \(1, 2\) -> \(\?, \?\)
+        def redact_in_values(match):
+            values = match.group(1)
+            num_values = len(values.split(','))
+            redacted = ', '.join([r'\?' for _ in range(num_values)])
+            return r'\(' + redacted + r'\)'
+        result = re.sub(r'\\\((\d+(?:, \d+)*)\\\)', redact_in_values, result)
+
+        # Replace literal values in column sub-selections like s\[0\] -> s\[\?\]
+        result = re.sub(r'\\\[(\d+)\\\]', r'\[\?\]', result)
+
+        return result
+
+    @staticmethod
     def _assert_logs(node, session, table, query, logged_query):
 
         # only check debug logs because at INFO level the no-spam logger has unpredictable results
@@ -1518,6 +1539,9 @@ class TestCQLSlowQuery(CQLTester):
         session.execute(SimpleStatement(query.format(table),
                                         consistency_level=ConsistencyLevel.ONE,
                                         retry_policy=FallthroughRetryPolicy()))
+
+        if node.is_converged_core() and node.cluster.version() >= '5.0':
+            logged_query = TestCQLSlowQuery._redact_logged_query(logged_query)
 
         node.watch_log_for(["operations were slow", logged_query.format(table)],
                            from_mark=mark, filename='debug.log', timeout=60)
