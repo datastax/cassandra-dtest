@@ -225,6 +225,8 @@ current_dse_6_9 = VersionMeta(name='current_dse_6_9', family=DSE_6_8, variant='c
 indev_cc4 = VersionMeta(name='indev_cc4', family=CC4, variant='indev', version='github:datastax/main', min_proto_v=3, max_proto_v=4, java_versions=(11,))
 # TODO - HCD-128
 #indev_hcd_1_2 = VersionMeta(name='current_hcd_1_2', family=HCD_1_2, variant='indev', version='xxx', min_proto_v=4, max_proto_v=5, java_versions=(11))
+current_hcd_1 = VersionMeta(name='current_hcd_1', family=HCD_1, variant='current', version='github:datastax/hcd-1.2.3', min_proto_v=3, max_proto_v=4, java_versions=(11,))
+
 
 indev_cc5 = VersionMeta(name='indev_cc5', family=CC5, variant='indev', version='github:datastax/main-5.0', min_proto_v=4, max_proto_v=5, java_versions=(11,17,22))
 # TODO - HCD-128
@@ -265,6 +267,8 @@ MANIFEST = {
     indev_4_0_x:  [indev_cc4, indev_4_1_x, indev_5_0_x, indev_cc5, indev_trunk],
     indev_4_1_x:  [indev_5_0_x, indev_cc5, indev_trunk],
     indev_5_0_x:  [indev_cc5, indev_trunk],
+
+    indev_cc4:    [indev_cc5],
 
     #indev_dse_5_1: [indev_cc4], # FIXME HCD-149
     current_dse_5_1: [indev_cc4],
