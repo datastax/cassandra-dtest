@@ -10,7 +10,7 @@ import logging
 
 from flaky import flaky
 
-from cassandra import InvalidRequest
+from cassandra import InvalidRequest, ReadFailure
 from cassandra.concurrent import (execute_concurrent,
                                   execute_concurrent_with_args)
 from cassandra.protocol import ConfigurationException
@@ -382,13 +382,22 @@ class TestSecondaryIndexes(Tester):
             node.nodetool("rebuild_index k t idx")
         after_files = self._index_sstables_files(node, 'k', 't', 'idx')
 
-        # Verify that the index is not built, not marked as built, and it still can answer queries and accept writes
+        # Verify that the index is not built, not marked as built, and it still can accept writes
         assert before_files == after_files
         assert_none(session, """SELECT * FROM system."IndexInfo" WHERE table_name='k'""")
         assert_length_equal(node.grep_log('idx.*became queryable', from_mark=mark), 0)
         assert_length_equal(node.grep_log('idx.*became writable', from_mark=mark), 0)
         session.execute("INSERT INTO k.t(k, v) VALUES (2, 1)")
-        assert_all(session, "SELECT k FROM k.t WHERE v = 1", [[0], [1], [2]], ignore_order=True)
+
+        # In 5.0+, IndexStatusManager marks the index as BUILD_FAILED after a failed rebuild,
+        # making it non-queryable (INDEX_NOT_AVAILABLE) on single-node clusters
+        if cluster.version() >= LooseVersion('5.0'):
+            with pytest.raises(ReadFailure) as exc_info:
+                session.execute("SELECT k FROM k.t WHERE v = 1")
+            assert 0x0006 in exc_info.value.error_code_map.values(), \
+                "Expected INDEX_NOT_AVAILABLE (0x0006) in error_code_map: " + str(exc_info.value.error_code_map)
+        else:
+            assert_all(session, "SELECT k FROM k.t WHERE v = 1", [[0], [1], [2]], ignore_order=True)
 
         # Restart the node to trigger the scheduled index rebuild
         before_files = after_files
@@ -416,13 +425,20 @@ class TestSecondaryIndexes(Tester):
             node.nodetool("rebuild_index k t idx")
         after_files = self._index_sstables_files(node, 'k', 't', 'idx')
 
-        # Verify that the index is not built, not marked as built, and it still can answer queries and accept writes
+        # Verify that the index is not built, not marked as built, and it still can accept writes
         assert before_files == after_files
         assert_none(session, """SELECT * FROM system."IndexInfo" WHERE table_name='k'""")
         assert_length_equal(node.grep_log('idx.*became queryable', from_mark=mark), 0)
         assert_length_equal(node.grep_log('idx.*became writable', from_mark=mark), 0)
         session.execute("INSERT INTO k.t(k, v) VALUES (4, 1)")
-        assert_all(session, "SELECT k FROM k.t WHERE v = 1", [[0], [1], [2], [3], [4]], ignore_order=True)
+
+        if cluster.version() >= LooseVersion('5.0'):
+            with pytest.raises(ReadFailure) as exc_info:
+                session.execute("SELECT k FROM k.t WHERE v = 1")
+            assert 0x0006 in exc_info.value.error_code_map.values(), \
+                "Expected INDEX_NOT_AVAILABLE (0x0006) in error_code_map: " + str(exc_info.value.error_code_map)
+        else:
+            assert_all(session, "SELECT k FROM k.t WHERE v = 1", [[0], [1], [2], [3], [4]], ignore_order=True)
 
         # Successfully rebuild the index
         before_files = after_files
@@ -433,7 +449,12 @@ class TestSecondaryIndexes(Tester):
         # Verify that the index is rebuilt, marked as built, and it still can answer queries and accept writes
         assert before_files != after_files
         assert_one(session, """SELECT table_name, index_name FROM system."IndexInfo" WHERE table_name='k'""", ['k', 'idx'])
-        assert_length_equal(node.grep_log('idx.*became queryable', from_mark=mark), 0)
+        # In 5.0+, the index was non-queryable after the failed rebuild, so the successful rebuild
+        # will log 'became queryable after successful build'
+        if cluster.version() >= LooseVersion('5.0'):
+            assert_length_equal(node.grep_log('idx.*became queryable after successful build', from_mark=mark), 1)
+        else:
+            assert_length_equal(node.grep_log('idx.*became queryable', from_mark=mark), 0)
         assert_length_equal(node.grep_log('idx.*became writable', from_mark=mark), 0)
         session.execute("INSERT INTO k.t(k, v) VALUES (5, 1)")
         assert_all(session, "SELECT k FROM k.t WHERE v = 1", [[0], [1], [2], [3], [4], [5]], ignore_order=True)
