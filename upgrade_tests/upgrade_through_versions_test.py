@@ -100,7 +100,7 @@ def data_writer(tester, to_verify_queue, verification_done_queue, rewrite_probab
             time.sleep(1)
             continue
         except Exception as ex:
-            logger.error("Error in data writer process!", ex)
+            logger.error("Error in data writer process!", exc_info=ex)
             shutdown_gently()
             raise
 
