@@ -58,7 +58,7 @@ RUN_STATIC_UPGRADE_MATRIX = os.environ.get('RUN_STATIC_UPGRADE_MATRIX', '').lowe
 def get_cluster_class(family):
     if family in (DSE_5_1, DSE_6_8, DSE_6_9):
         return DseCluster
-    elif family in (HCD_1, HCD_2):
+    elif family in (HCD_2,):
         return HcdCluster
     else:
         return Cluster
@@ -266,6 +266,7 @@ MANIFEST = {
     indev_5_0_x:  [indev_cc5, indev_trunk],
 
     indev_cc4:    [indev_cc5],
+    current_hcd_1: [indev_cc5],
 
     #indev_dse_5_1: [indev_cc4], # FIXME HCD-149
     current_dse_5_1: [indev_cc4],
