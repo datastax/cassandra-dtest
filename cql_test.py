@@ -1157,6 +1157,7 @@ class TestCQLSlowQuery(CQLTester):
 
     @staticmethod
     def _assert_logs_slow_queries(node, session):
+        time.sleep(60)
         TestCQLSlowQuery._assert_logs_slow_queries_with_skinny_table(node, session)
         for asc in (True, False):
             TestCQLSlowQuery._assert_logs_slow_queries_with_wide_table(node, session, asc=asc)
@@ -1540,7 +1541,7 @@ class TestCQLSlowQuery(CQLTester):
                                         consistency_level=ConsistencyLevel.ONE,
                                         retry_policy=FallthroughRetryPolicy()))
 
-        if node.is_converged_core() and node.cluster.version() >= '5.0':
+        if node.is_converged_core() and node.cluster.version() >= '4.0':
             logged_query = TestCQLSlowQuery._redact_logged_query(logged_query)
 
         node.watch_log_for(["operations were slow", logged_query.format(table)],
