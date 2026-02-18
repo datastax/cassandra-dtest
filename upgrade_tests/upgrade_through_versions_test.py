@@ -359,6 +359,8 @@ class TestUpgrade(Tester):
             r'Snitch definitions at cassandra-topology.properties do not define a location',
             # CC4->CC5 upgrade: CC5 reads CC4 memtable config that doesn't match; falls back to default safely
             r'Invalid memtable configuration.*in schema\. Falling back to default',
+            # CC4->CC5 upgrade: gossip shutdown message deserialization mismatch during rolling upgrade
+            r'unexpected exception caught while deserializing a message.*GossipShutdown',
         )
 
     def reinit_cluster_for_family(self, meta):
