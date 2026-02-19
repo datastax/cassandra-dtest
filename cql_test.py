@@ -1157,6 +1157,11 @@ class TestCQLSlowQuery(CQLTester):
 
     @staticmethod
     def _assert_logs_slow_queries(node, session):
+        # This is the default value for cassandra.cluster_version_provider.min_stable_duration_ms
+        # which gives the time for the cluster to settle and have the correct view for upgrade
+        # state and min versions.
+        # Before this view the ColumnFilter will work in backward compatibility mode and the
+        # test will fail because it always logs SELECT * for all queries. (CNDB-16554)
         time.sleep(60)
         TestCQLSlowQuery._assert_logs_slow_queries_with_skinny_table(node, session)
         for asc in (True, False):
