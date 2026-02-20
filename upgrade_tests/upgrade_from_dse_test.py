@@ -10,7 +10,7 @@ from dtest import Tester
 
 from tools.data import rows_to_list
 from tools.misc import generate_ssl_stores
-from upgrade_tests.upgrade_manifest import get_cluster_class, indev_dse_6_9, CC4
+from upgrade_tests.upgrade_manifest import get_cluster_class, current_dse_6_9, CC4
 
 since = pytest.mark.since
 logger = logging.getLogger(__name__)
@@ -31,13 +31,13 @@ class TestUpgradeFromDSEWithConcurrentWritesAndRestarts(Tester):
         ]
 
     def test_upgrade_from_6_9_with_internode_encryption(self):
-        self.upgrade_from_6_9(internode_encryption=True)
+        self.upgrade_while_writing(version_descriptor=current_dse_6_9, internode_encryption=True)
 
     def test_upgrade_from_6_9(self):
-        self.upgrade_from_6_9(internode_encryption=False)
+        self.upgrade_while_writing(version_descriptor=current_dse_6_9, internode_encryption=False)
 
-    def upgrade_from_6_9(self, internode_encryption=False):
-        cluster = self.setup_nodes(indev_dse_6_9.version, internode_encryption=internode_encryption)
+    def upgrade_while_writing(self, version_descriptor, internode_encryption=False):
+        cluster = self._setup_nodes(version_descriptor, internode_encryption=internode_encryption)
         cluster.start()
 
         for node in cluster.nodelist():
@@ -80,14 +80,14 @@ class TestUpgradeFromDSEWithConcurrentWritesAndRestarts(Tester):
                               wait_for_binary_proto=True)
         self._assert_insert_select_works(upgraded_node_3, 600, 700)
 
-    def setup_nodes(self, version, internode_encryption=False):
+    def _setup_nodes(self, version_descriptor, internode_encryption=False):
         cluster = self.cluster
 
-        meta_family_class = get_cluster_class(indev_dse_6_9.family)
+        meta_family_class = get_cluster_class(version_descriptor.family)
         self.cluster.__class__ = meta_family_class
         self.cluster._cassandra_version = self.cluster.dse_username = self.cluster.dse_password = self.cluster.opscenter = None
 
-        cluster.set_install_dir(version=version)
+        cluster.set_install_dir(version=version_descriptor.version)
 
         cluster.set_configuration_options(values={'endpoint_snitch': 'org.apache.cassandra.locator.SimpleSnitch', 'nodesync': {'enabled': False}})
 
