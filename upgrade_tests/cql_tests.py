@@ -129,7 +129,7 @@ class TestCQL(UpgradeTester):
                 firstname ascii,
                 lastname ascii,
                 age int
-            ) WITH COMPACT STORAGE;
+            );
         """)
 
         for is_upgraded, cursor in self.do_upgrade(cursor):
@@ -177,7 +177,7 @@ class TestCQL(UpgradeTester):
                 url text,
                 time bigint,
                 PRIMARY KEY (userid, url)
-            ) WITH COMPACT STORAGE;
+            );
         """)
 
         for is_upgraded, cursor in self.do_upgrade(cursor):
@@ -216,7 +216,7 @@ class TestCQL(UpgradeTester):
                 port int,
                 time bigint,
                 PRIMARY KEY (userid, ip, port)
-            ) WITH COMPACT STORAGE;
+            );
         """)
 
         for is_upgraded, cursor in self.do_upgrade(cursor):
@@ -314,7 +314,7 @@ class TestCQL(UpgradeTester):
                 url text,
                 time bigint,
                 PRIMARY KEY (userid, url)
-            ) WITH COMPACT STORAGE;
+            );
         """)
 
         for is_upgraded, cursor in self.do_upgrade(cursor):
@@ -341,7 +341,7 @@ class TestCQL(UpgradeTester):
                 url text,
                 time bigint,
                 PRIMARY KEY (userid, url)
-            ) WITH COMPACT STORAGE;
+            );
         """)
 
         for is_upgraded, cursor in self.do_upgrade(cursor):
@@ -434,7 +434,7 @@ class TestCQL(UpgradeTester):
         if self.cluster.version() >= LooseVersion('4.0'):
             cursor.execute(create_table_query)
         else:
-            cursor.execute(create_table_query + '  WITH COMPACT STORAGE')
+            cursor.execute(create_table_query)
 
         for is_upgraded, cursor in self.do_upgrade(cursor):
             logger.debug("Querying {} node".format("upgraded" if is_upgraded else "old"))
@@ -528,7 +528,7 @@ class TestCQL(UpgradeTester):
                 c int,
                 v int,
                 PRIMARY KEY (k, c)
-            ) WITH COMPACT STORAGE;
+            );
         """)
 
         for is_upgraded, cursor in self.do_upgrade(cursor):
@@ -565,7 +565,7 @@ class TestCQL(UpgradeTester):
                 c int,
                 v int,
                 PRIMARY KEY (k, c)
-            ) WITH COMPACT STORAGE;
+            );
         """)
 
         # composites
@@ -576,7 +576,7 @@ class TestCQL(UpgradeTester):
                 c2 int,
                 v int,
                 PRIMARY KEY (k, c1, c2)
-            ) WITH COMPACT STORAGE;
+            );
         """)
 
         for is_upgraded, cursor in self.do_upgrade(cursor):
@@ -614,7 +614,7 @@ class TestCQL(UpgradeTester):
                 c int,
                 v int,
                 PRIMARY KEY (k, c)
-            ) WITH COMPACT STORAGE;
+            );
         """)
 
         # composites
@@ -666,7 +666,7 @@ class TestCQL(UpgradeTester):
                 number int,
                 string text,
                 PRIMARY KEY (row, number)
-            ) WITH COMPACT STORAGE
+            )
         """)
 
         cursor.execute("""
@@ -676,7 +676,7 @@ class TestCQL(UpgradeTester):
                 number2 int,
                 string text,
                 PRIMARY KEY (row, number, number2)
-            ) WITH COMPACT STORAGE
+            )
         """)
 
         for is_upgraded, cursor in self.do_upgrade(cursor):
@@ -913,7 +913,7 @@ class TestCQL(UpgradeTester):
                 name varchar,
                 stuff varchar,
                 PRIMARY KEY(username, id, name)
-            ) WITH COMPACT STORAGE;
+            );
         """)
 
         for is_upgraded, cursor in self.do_upgrade(cursor):
@@ -1687,7 +1687,7 @@ class TestCQL(UpgradeTester):
                 k int,
                 c int,
                 PRIMARY KEY (k, c)
-            ) WITH COMPACT STORAGE
+            )
         """)
 
         for is_upgraded, cursor in self.do_upgrade(cursor):
@@ -2051,7 +2051,7 @@ class TestCQL(UpgradeTester):
                 c int,
                 v int,
                 PRIMARY KEY (k, c)
-            ) WITH COMPACT STORAGE
+            )
               AND CLUSTERING ORDER BY (c DESC);
         """)
 
@@ -2061,7 +2061,7 @@ class TestCQL(UpgradeTester):
                 c int,
                 v int,
                 PRIMARY KEY (k, c)
-            ) WITH COMPACT STORAGE;
+            );
         """)
 
         for is_upgraded, cursor in self.do_upgrade(cursor):
@@ -2125,7 +2125,7 @@ class TestCQL(UpgradeTester):
                 c2 int,
                 value text,
                 PRIMARY KEY(key, c1, c2)
-                ) WITH COMPACT STORAGE
+                )
                   AND CLUSTERING ORDER BY(c1 DESC, c2 DESC);
         """)
 
@@ -2518,7 +2518,7 @@ class TestCQL(UpgradeTester):
             )"""
 
         if compact:
-            create = create + " WITH COMPACT STORAGE"
+            create = create
 
         cursor.execute(create)
 
@@ -2573,7 +2573,7 @@ class TestCQL(UpgradeTester):
                 c int,
                 v int,
                 PRIMARY KEY (key, c)
-            ) WITH COMPACT STORAGE
+            )
         """)
 
         for is_upgraded, cursor in self.do_upgrade(cursor):
@@ -2712,7 +2712,7 @@ class TestCQL(UpgradeTester):
             CREATE TABLE bar (
                 id int primary key,
                 i int
-            ) WITH COMPACT STORAGE;
+            );
         """)
 
         for is_upgraded, cursor in self.do_upgrade(cursor):
@@ -2740,7 +2740,7 @@ class TestCQL(UpgradeTester):
             CREATE TABLE t1 (
                 a int PRIMARY KEY,
                 b int
-            ) WITH COMPACT STORAGE;
+            );
         """)
 
         execute_concurrent_with_args(cursor,
@@ -3305,7 +3305,7 @@ class TestCQL(UpgradeTester):
         cursor = self.prepare()
         cursor.execute("CREATE TABLE test (k1 int, k2 int, v int, PRIMARY KEY (k1, k2))")
         # Same test, but for compact
-        cursor.execute("CREATE TABLE test_compact (k1 int, k2 int, v int, PRIMARY KEY (k1, k2)) WITH COMPACT STORAGE")
+        cursor.execute("CREATE TABLE test_compact (k1 int, k2 int, v int, PRIMARY KEY (k1, k2))")
 
         for is_upgraded, cursor in self.do_upgrade(cursor):
             logger.debug("Querying {} node".format("upgraded" if is_upgraded else "old"))
@@ -3374,9 +3374,9 @@ class TestCQL(UpgradeTester):
         # Test a regular (CQL3) table.
         cursor.execute('CREATE TABLE regular (pk0 int, pk1 int, ck0 int, val int, PRIMARY KEY((pk0, pk1), ck0))')
         # Test a 'compact storage' table.
-        cursor.execute('CREATE TABLE compact (pk0 int, pk1 int, val int, PRIMARY KEY((pk0, pk1))) WITH COMPACT STORAGE')
+        cursor.execute('CREATE TABLE compact (pk0 int, pk1 int, val int, PRIMARY KEY((pk0, pk1)))')
         # Test a 'wide row' thrift table.
-        cursor.execute('CREATE TABLE wide (pk int, name text, val int, PRIMARY KEY(pk, name)) WITH COMPACT STORAGE')
+        cursor.execute('CREATE TABLE wide (pk int, name text, val int, PRIMARY KEY(pk, name))')
 
         for is_upgraded, cursor in self.do_upgrade(cursor):
             logger.debug("Querying {} node".format("upgraded" if is_upgraded else "old"))
@@ -4346,7 +4346,7 @@ class TestCQL(UpgradeTester):
                 key text,
                 owner text,
                 PRIMARY KEY (partition, key)
-            ) WITH COMPACT STORAGE
+            )
         """)
 
         for is_upgraded, cursor in self.do_upgrade(cursor):
@@ -5010,7 +5010,7 @@ class TestCQL(UpgradeTester):
                 k int,
                 v int,
                 PRIMARY KEY (k, v)
-            ) WITH COMPACT STORAGE
+            )
         """)
 
         for is_upgraded, cursor in self.do_upgrade(cursor):
