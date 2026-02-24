@@ -10,7 +10,7 @@ from dtest import Tester
 
 from tools.data import rows_to_list
 from tools.misc import generate_ssl_stores
-from upgrade_tests.upgrade_manifest import get_cluster_class, current_dse_6_9, CC4
+from upgrade_tests.upgrade_manifest import get_cluster_class, current_dse_6_9, CC4, indev_dse_6_9
 
 since = pytest.mark.since
 logger = logging.getLogger(__name__)
@@ -31,10 +31,10 @@ class TestUpgradeFromDSEWithConcurrentWritesAndRestarts(Tester):
         ]
 
     def test_upgrade_from_6_9_with_internode_encryption(self):
-        self.upgrade_while_writing(version_descriptor=current_dse_6_9, internode_encryption=True)
+        self.upgrade_while_writing(version_descriptor=indev_dse_6_9, internode_encryption=True)
 
     def test_upgrade_from_6_9(self):
-        self.upgrade_while_writing(version_descriptor=current_dse_6_9, internode_encryption=False)
+        self.upgrade_while_writing(version_descriptor=indev_dse_6_9, internode_encryption=False)
 
     def upgrade_while_writing(self, version_descriptor, internode_encryption=False):
         cluster = self._setup_nodes(version_descriptor, internode_encryption=internode_encryption)
