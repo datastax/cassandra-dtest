@@ -508,6 +508,9 @@ class DTestSetup(object):
         if self.cluster.cassandra_version() >= '4':
             values['corrupted_tombstone_strategy'] = 'exception'
 
+        if self.cluster.cassandra_version() >= '5.0':
+            values['storage_compatibility_mode'] = os.environ.get('TEST_STORAGE_COMPATIBILITY_MODE', 'NONE')
+
         if self.dtest_config.use_vnodes:
             self.cluster.set_configuration_options(values={'num_tokens': self.dtest_config.num_tokens})
         else:
