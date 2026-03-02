@@ -282,6 +282,12 @@ MANIFEST = {
     #current_hcd_2_0: [indev_cc5, indev_hcd_2_0]
 }
 
+# DOWNGRADE_MANIFEST maps a VersionMeta to a list of VersionMeta's representing supported downgrades.
+# Used for testing that a cluster can be downgraded from a newer version to an older one while preserving data.
+DOWNGRADE_MANIFEST = {
+    indev_cc5: [indev_cc4],
+}
+
 def _have_common_proto(origin_meta, destination_meta):
     """
     Takes two VersionMeta objects, in order of test from start version to next version.
@@ -380,3 +386,47 @@ def build_upgrade_pairs():
                 )
 
     return valid_upgrade_pairs
+
+
+def build_downgrade_pairs():
+    """
+    Using the DOWNGRADE_MANIFEST, builds a set of valid downgrade paths.
+
+    Returns a list of UpgradePath's (reusing the same namedtuple, where
+    starting_meta is the higher version and upgrade_meta is the lower version).
+    """
+    valid_downgrade_pairs = []
+
+    for origin_meta, destination_metas in list(DOWNGRADE_MANIFEST.items()):
+        for destination_meta in destination_metas:
+            if not (origin_meta and destination_meta):
+                logger.debug("skipping downgrade class creation as a version is undefined, versions: {} and {}".format(origin_meta, destination_meta))
+                continue
+
+            if not _have_common_proto(origin_meta, destination_meta):
+                logger.debug("skipping downgrade class creation, no compatible protocol version between {} and {}".format(origin_meta.name, destination_meta.name))
+                continue
+
+            proto_v = min(origin_meta.max_proto_v, destination_meta.max_proto_v)
+
+            path_name = 'Downgrade_' + origin_meta.name + '_To_' + destination_meta.name
+
+            if not RUN_STATIC_UPGRADE_MATRIX:
+                if origin_meta.matches_current_env_version_family:
+                    oldmeta = origin_meta
+                    newmeta = origin_meta.clone_with_local_env_version()
+                    logger.debug("{} appears applicable to current env. Overriding starting version from {} to {}".format(path_name, oldmeta.version, newmeta.version))
+                    origin_meta = newmeta
+
+            if len(jdk_compatible_steps([origin_meta, destination_meta])) > 1:
+                valid_downgrade_pairs.append(
+                    UpgradePath(
+                        name=path_name,
+                        starting_version=origin_meta.version,
+                        upgrade_version=destination_meta.version,
+                        starting_meta=origin_meta,
+                        upgrade_meta=destination_meta
+                    )
+                )
+
+    return valid_downgrade_pairs
