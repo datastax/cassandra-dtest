@@ -59,7 +59,10 @@ def default_ignore_log_patterns():
             # queries which probe for the default superuser role to be directed to the wrong node, _if_ they are sent
             # while peers are performing UnsafeJoins. This behaviour is safe, but it can cause flaky tests if the
             # ERROR unexpectedly appears in the log
-            r'Received a read request from .* for a token .* that is not owned by the current replica .* key=cassandra .*'
+            r'Received a read request from .* for a token .* that is not owned by the current replica .* key=cassandra .*',
+            # the two below error patterns are needed by DSE upgrade tests
+            r'that is incompatible with the version this node can handle',
+            r'Unable to merge schema from',
             ]
 
 
