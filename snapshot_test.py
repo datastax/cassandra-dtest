@@ -122,6 +122,48 @@ class TestSnapshot(SnapshotTester):
 
         assert rows[0][0] == 100
 
+    @since('4.0')
+    def test_snapshot_and_restore_with_nodetool_import(self):
+        """
+        Test that nodetool import can be used to restore sstables from a snapshot.
+        Similar to test_basic_snapshot_and_restore but uses 'nodetool import' instead
+        of sstableloader + refresh.
+        """
+        cluster = self.cluster
+        cluster.populate(1).start()
+        (node1,) = cluster.nodelist()
+        session = self.patient_cql_connection(node1)
+        self.create_schema(session)
+
+        self.insert_rows(session, 0, 100)
+        snapshot_dir = self.make_snapshot(node1, 'ks', 'cf', 'basic')
+
+        # Write more data after the snapshot, this will get thrown
+        # away when we restore:
+        self.insert_rows(session, 100, 200)
+        rows = session.execute('SELECT count(*) from ks.cf')
+        assert rows[0][0] == 200
+
+        # Drop the keyspace, make sure we have no data:
+        session.execute('DROP KEYSPACE ks')
+        self.create_schema(session)
+        rows = session.execute('SELECT count(*) from ks.cf')
+        assert rows[0][0] == 0
+
+        # Restore data from snapshot using nodetool import:
+        for x in range(0, self.cluster.data_dir_count):
+            snap_dir = os.path.join(snapshot_dir, str(x), 'ks', 'cf')
+            if os.path.exists(snap_dir):
+                node1.nodetool('import ks cf {}'.format(snap_dir))
+
+        rows = session.execute('SELECT count(*) from ks.cf')
+
+        # clean up
+        logger.debug("removing snapshot_dir: " + snapshot_dir)
+        shutil.rmtree(snapshot_dir)
+
+        assert rows[0][0] == 100
+
     @since('3.0')
     def test_snapshot_and_restore_drop_table_remove_dropped_column(self):
         """
