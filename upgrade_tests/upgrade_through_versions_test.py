@@ -89,7 +89,7 @@ def data_writer(tester, to_verify_queue, verification_done_queue, rewrite_probab
                 time.sleep(1)  # Pstmnt id mismatch, retry. See CASSANDRA-15252/17140
                 continue
             else:
-                logger.error("Error in data writer process!", dex)
+                logger.error("Error in data writer process!", exc_info=True)
                 shutdown_gently()
                 raise
         except OperationTimedOut:
@@ -100,7 +100,7 @@ def data_writer(tester, to_verify_queue, verification_done_queue, rewrite_probab
             time.sleep(1)
             continue
         except Exception as ex:
-            logger.error("Error in data writer process!", exc_info=ex)
+            logger.error("Error in data writer process!", exc_info=True)
             shutdown_gently()
             raise
 
@@ -144,7 +144,7 @@ def data_checker(tester, to_verify_queue, verification_done_queue):
             # we would end up blocking indefinitely
             (key, expected_val) = to_verify_queue.get_nowait()
 
-            actual_val = session.execute(prepared, (key,))[0][0]
+            actual_val = session.execute(prepared, (key,), timeout=30)[0][0]
         except Empty:
             time.sleep(1)  # let's not eat CPU if the queue is empty
             logger.info("to_verify_queue is empty: %d" % to_verify_queue.qsize())
@@ -154,7 +154,7 @@ def data_checker(tester, to_verify_queue, verification_done_queue):
                 time.sleep(1)  # Pstmnt id mismatch, retry. See CASSANDRA-15252/17140
                 continue
             else:
-                logger.error("Error in data checker process!", dex)
+                logger.error("Error in data checker process!", exc_info=True)
                 shutdown_gently()
                 raise
         except OperationTimedOut:
@@ -165,7 +165,7 @@ def data_checker(tester, to_verify_queue, verification_done_queue):
             time.sleep(1)
             continue
         except Exception as ex:
-            logger.error("Error in data checker process!", ex)
+            logger.error("Error in data checker process!", exc_info=True)
             shutdown_gently()
             raise
         else:
@@ -178,7 +178,7 @@ def data_checker(tester, to_verify_queue, verification_done_queue):
                 # rewrite rows in the same sequence as originally written
                 pass
             except Exception as ex:
-                logger.error("Failed to put into verification_done_queue", ex)
+                logger.error("Failed to put into verification_done_queue", exc_info=True)
 
         assert expected_val == actual_val, "Data did not match expected value!"
 
@@ -238,7 +238,7 @@ def counter_incrementer(tester, to_verify_queue, verification_done_queue, rewrit
                 time.sleep(1)  # Pstmnt id mismatch, retry. See CASSANDRA-15252/17140
                 continue
             else:
-                logger.error("Error in counter incrementer process!", dex)
+                logger.error("Error in counter incrementer process!", exc_info=True)
                 shutdown_gently()
                 raise
         except OperationTimedOut:
@@ -249,7 +249,7 @@ def counter_incrementer(tester, to_verify_queue, verification_done_queue, rewrit
             time.sleep(1)
             continue
         except Exception as ex:
-            logger.error("Error in counter incrementer process!", ex)
+            logger.error("Error in counter incrementer process!", exc_info=True)
             shutdown_gently()
             raise
 
@@ -302,7 +302,7 @@ def counter_checker(tester, to_verify_queue, verification_done_queue):
                 time.sleep(1)  # Pstmnt id mismatch, retry. See CASSANDRA-15252/17140
                 continue
             else:
-                logger.error("Error in counter verifier process!", dex)
+                logger.error("Error in counter verifier process!", exc_info=True)
                 shutdown_gently()
                 raise
         except OperationTimedOut:
@@ -313,7 +313,7 @@ def counter_checker(tester, to_verify_queue, verification_done_queue):
             time.sleep(1)
             continue
         except Exception as ex:
-            logger.error("Error in counter verifier process!", ex)
+            logger.error("Error in counter verifier process!", exc_info=True)
             shutdown_gently()
             raise
         else:
