@@ -341,8 +341,34 @@ def build_upgrade_pairs():
     valid_upgrade_pairs = []
     manifest = MANIFEST
 
+    # Get configuration options
+    source_filter_str = CONFIG.getoption("--upgrade-source-filter")
+    target_filter_str = CONFIG.getoption("--upgrade-target-filter")
     configured_strategy = CONFIG.getoption("--upgrade-version-selection").upper()
+
+    # Step 1: Apply version selection strategy to get initial set of upgrade paths
     version_select_strategy = VersionSelectionStrategies[configured_strategy].value[0]
+    logger.info(f"Using version selection strategy: {configured_strategy}")
+
+    # Step 2: Apply source/target filters to narrow down the results (if specified)
+    if source_filter_str or target_filter_str:
+        # Parse comma-separated version names
+        allowed_source_names = set(name.strip() for name in source_filter_str.split(',') if name.strip()) if source_filter_str else None
+        allowed_target_names = set(name.strip() for name in target_filter_str.split(',') if name.strip()) if target_filter_str else None
+
+        if allowed_source_names:
+            logger.info(f"Applying source version filter: {allowed_source_names}")
+            # Filter manifest based on source filter
+            manifest = {k: v for k, v in MANIFEST.items() if k.name in allowed_source_names}
+
+        if allowed_target_names:
+            logger.info(f"Applying target version filter: {allowed_target_names}")
+            # Filter destination versions based on target filter
+            manifest = {k: [v for v in vs if v.name in allowed_target_names] for k, vs in manifest.items()}
+
+        # Remove entries with no valid destinations
+        manifest = {k: v for k, v in manifest.items() if v}
+
     filter_for_current_family = CONFIG.getoption("--upgrade-target-version-only")
 
     for origin_meta, destination_metas in list(manifest.items()):

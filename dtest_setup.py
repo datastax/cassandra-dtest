@@ -534,6 +534,10 @@ class DTestSetup(object):
                 self.cluster._config_options.pop('repaired_data_tracking_for_range_reads_enabled', None)
                 self.cluster._config_options.pop('report_unconfirmed_repaired_data_mismatches', None)
                 self.cluster._config_options.pop('corrupted_tombstone_strategy', None)
+        # storage_compatibility_mode is only supported in 5.0+
+        if self.cluster.cassandra_version() < LooseVersion('5.0'):
+            if self.cluster._config_options is not None:
+                self.cluster._config_options.pop('storage_compatibility_mode', None)
 
     def maybe_setup_jacoco(self, cluster_name='test'):
         """Setup JaCoCo code coverage support"""
