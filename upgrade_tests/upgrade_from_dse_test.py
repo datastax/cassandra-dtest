@@ -1,4 +1,5 @@
 import shutil
+from distutils.version import LooseVersion
 
 import pytest
 import logging
@@ -10,7 +11,8 @@ from dtest import Tester
 
 from tools.data import rows_to_list
 from tools.misc import generate_ssl_stores
-from upgrade_tests.upgrade_manifest import get_cluster_class, current_dse_6_9, CC4, indev_dse_6_9
+from upgrade_tests.upgrade_manifest import get_cluster_class, current_dse_6_9, CC4, indev_dse_6_9, indev_dse_6_8, \
+    indev_dse_5_1
 
 since = pytest.mark.since
 logger = logging.getLogger(__name__)
@@ -36,12 +38,25 @@ class TestUpgradeFromDSEWithConcurrentWritesAndRestarts(Tester):
     def test_upgrade_from_6_9(self):
         self.upgrade_while_writing(version_descriptor=indev_dse_6_9, internode_encryption=False)
 
+    # TODO fails def test_upgrade_from_6_8_with_internode_encryption(self):
+    #     self.upgrade_while_writing(version_descriptor=indev_dse_6_8, internode_encryption=True)
+
+    def test_upgrade_from_6_8(self):
+        self.upgrade_while_writing(version_descriptor=indev_dse_6_8, internode_encryption=False)
+
+    # TODO fails def test_upgrade_from_5_1_with_internode_encryption(self):
+    #     self.upgrade_while_writing(version_descriptor=indev_dse_5_1, internode_encryption=True)
+
+    def test_upgrade_from_5_1(self):
+        self.upgrade_while_writing(version_descriptor=indev_dse_5_1, internode_encryption=False)
+
     def upgrade_while_writing(self, version_descriptor, internode_encryption=False):
         cluster = self._setup_nodes(version_descriptor, internode_encryption=internode_encryption)
         cluster.start()
 
-        for node in cluster.nodelist():
-            node.nodetool('nodesyncservice disable')
+        if self.cluster.version() >= LooseVersion('6.8'):
+            for node in cluster.nodelist():
+                node.nodetool('nodesyncservice disable')
 
         nodes = cluster.nodelist()
 
@@ -89,7 +104,10 @@ class TestUpgradeFromDSEWithConcurrentWritesAndRestarts(Tester):
 
         cluster.set_install_dir(version=version_descriptor.version)
 
-        cluster.set_configuration_options(values={'endpoint_snitch': 'org.apache.cassandra.locator.SimpleSnitch', 'nodesync': {'enabled': False}})
+        if cluster.version() >= LooseVersion('6.8'):
+            cluster.set_configuration_options(values={'endpoint_snitch': 'org.apache.cassandra.locator.SimpleSnitch', 'nodesync': {'enabled': False}})
+        else:
+            cluster.set_configuration_options(values={'endpoint_snitch': 'org.apache.cassandra.locator.SimpleSnitch'})
 
         if internode_encryption:
             generate_ssl_stores(self.fixture_dtest_setup.test_path)
@@ -110,8 +128,9 @@ class TestUpgradeFromDSEWithConcurrentWritesAndRestarts(Tester):
         cluster.__class__ = meta_family_class
         cluster._cassandra_version = self.cluster.dse_username = self.cluster.dse_password = self.cluster.opscenter = None
 
-        node.set_configuration_options(values={'nodesync': None}, delete_empty=True, delete_always=True)
-        cluster.set_configuration_options(values={'nodesync': None}, delete_empty=True, delete_always=True)
+        if node.get_cassandra_version() >= LooseVersion('4.0'):
+            node.set_configuration_options(values={'nodesync': None}, delete_empty=True, delete_always=True)
+            cluster.set_configuration_options(values={'nodesync': None}, delete_empty=True, delete_always=True)
 
         old_conf = node.get_conf_dir()
         node.__class__ = cluster.getNodeClass()
