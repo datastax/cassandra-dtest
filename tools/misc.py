@@ -68,7 +68,8 @@ def generate_ssl_stores(base_dir, passphrase='cassandra'):
     logger.debug("generating keystore.jks in [{0}]".format(base_dir))
     subprocess.check_call(['keytool', '-genkeypair', '-alias', 'ccm_node', '-keyalg', 'RSA', '-validity', '365',
                            '-keystore', os.path.join(base_dir, 'keystore.jks'), '-storepass', passphrase,
-                           '-dname', 'cn=Cassandra Node,ou=CCMnode,o=DataStax,c=US', '-keypass', passphrase])
+                           '-dname', 'cn=Cassandra Node,ou=CCMnode,o=DataStax,c=US', '-keypass', passphrase,
+                           '-ext', 'san=dns:localhost,ip:127.0.0.1'])
     logger.debug("exporting cert from keystore.jks in [{0}]".format(base_dir))
     subprocess.check_call(['keytool', '-export', '-rfc', '-alias', 'ccm_node',
                            '-keystore', os.path.join(base_dir, 'keystore.jks'),
