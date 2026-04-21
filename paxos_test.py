@@ -58,9 +58,11 @@ class TestPaxos(Tester):
         assert_unavailable(session.execute, "INSERT INTO test (k, v) VALUES (2, 2) IF NOT EXISTS")
 
         node1.start(wait_for_binary_proto=True)
+        session.cluster.control_connection.wait_for_schema_agreement(wait_time=120)
         session.execute("INSERT INTO test (k, v) VALUES (3, 3) IF NOT EXISTS")
 
         node2.start(wait_for_binary_proto=True)
+        session.cluster.control_connection.wait_for_schema_agreement(wait_time=120)
         session.execute("INSERT INTO test (k, v) VALUES (4, 4) IF NOT EXISTS")
 
     @pytest.mark.no_vnodes
