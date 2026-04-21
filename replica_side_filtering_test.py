@@ -48,6 +48,7 @@ class ReplicaSideFiltering(Tester):
         # create the index if it's required
         if self.create_index():
             session.execute(create_index)
+            session.cluster.control_connection.wait_for_schema_agreement(wait_time=120)
 
         # execute the queries for both nodes with CL=ALL
         if both_nodes:
@@ -72,6 +73,7 @@ class ReplicaSideFiltering(Tester):
         for q in queries:
             session.execute(q)
         node_to_stop.start()
+        session.cluster.control_connection.wait_for_schema_agreement(wait_time=120)
 
     def _assert_none(self, query):
         """
