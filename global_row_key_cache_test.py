@@ -42,6 +42,7 @@ class TestGlobalRowKeyCache(Tester):
                 create_ks(session, keyspace_name, rf=3)
 
                 session.set_keyspace(keyspace_name)
+                table = lambda cf: "%s.%s" % (keyspace_name, cf)
                 create_cf_simple(session, 'test', "CREATE TABLE test (k int PRIMARY KEY, v1 int, v2 int)")
                 create_cf_simple(session, 'test_clustering',
                                  "CREATE TABLE test_clustering (k int, v1 int, v2 int, PRIMARY KEY (k, v1))")
@@ -52,16 +53,16 @@ class TestGlobalRowKeyCache(Tester):
                 # insert 100 rows into each table
                 for cf in ('test', 'test_clustering'):
                     execute_concurrent_with_args(
-                        session, session.prepare("INSERT INTO %s (k, v1, v2) VALUES (?, ?, ?)" % (cf,)),
+                        session, session.prepare("INSERT INTO %s (k, v1, v2) VALUES (?, ?, ?)" % table(cf)),
                         [(i, i, i) for i in range(100)])
 
                 execute_concurrent_with_args(
-                    session, session.prepare("UPDATE test_counter SET v1 = v1 + ? WHERE k = ?"),
+                    session, session.prepare("UPDATE %s SET v1 = v1 + ? WHERE k = ?" % table('test_counter')),
                     [(i, i) for i in range(100)],
                     concurrency=2)
 
                 execute_concurrent_with_args(
-                    session, session.prepare("UPDATE test_counter_clustering SET v2 = v2 + ? WHERE k = ? AND v1 = ?"),
+                    session, session.prepare("UPDATE %s SET v2 = v2 + ? WHERE k = ? AND v1 = ?" % table('test_counter_clustering')),
                     [(i, i, i) for i in range(100)],
                     concurrency=2)
 
@@ -73,27 +74,27 @@ class TestGlobalRowKeyCache(Tester):
                 # on non-counter tables, delete the first (remaining) row each round
                 num_updates = 10
                 for validation_round in range(3):
-                    session.execute("DELETE FROM test WHERE k = %s", (validation_round,))
+                    session.execute("DELETE FROM %s WHERE k = %%s" % table('test'), (validation_round,))
                     execute_concurrent_with_args(
-                        session, session.prepare("UPDATE test SET v1 = ?, v2 = ? WHERE k = ?"),
+                        session, session.prepare("UPDATE %s SET v1 = ?, v2 = ? WHERE k = ?" % table('test')),
                         [(i, validation_round, i) for i in range(validation_round + 1, num_updates)])
 
-                    session.execute("DELETE FROM test_clustering WHERE k = %s AND v1 = %s", (validation_round, validation_round))
+                    session.execute("DELETE FROM %s WHERE k = %%s AND v1 = %%s" % table('test_clustering'), (validation_round, validation_round))
                     execute_concurrent_with_args(
-                        session, session.prepare("UPDATE test_clustering SET v2 = ? WHERE k = ? AND v1 = ?"),
+                        session, session.prepare("UPDATE %s SET v2 = ? WHERE k = ? AND v1 = ?" % table('test_clustering')),
                         [(validation_round, i, i) for i in range(validation_round + 1, num_updates)])
 
                     execute_concurrent_with_args(
-                        session, session.prepare("UPDATE test_counter SET v1 = v1 + ? WHERE k = ?"),
+                        session, session.prepare("UPDATE %s SET v1 = v1 + ? WHERE k = ?" % table('test_counter')),
                         [(1, i) for i in range(num_updates)],
                         concurrency=2)
 
                     execute_concurrent_with_args(
-                        session, session.prepare("UPDATE test_counter_clustering SET v2 = v2 + ? WHERE k = ? AND v1 = ?"),
+                        session, session.prepare("UPDATE %s SET v2 = v2 + ? WHERE k = ? AND v1 = ?" % table('test_counter_clustering')),
                         [(1, i, i) for i in range(num_updates)],
                         concurrency=2)
 
-                    self._validate_values(session, num_updates, validation_round)
+                    self._validate_values(session, keyspace_name, num_updates, validation_round)
 
                 session.shutdown()
 
@@ -111,12 +112,12 @@ class TestGlobalRowKeyCache(Tester):
                 session.set_keyspace(keyspace_name)
 
                 # check all values again
-                self._validate_values(session, num_updates, validation_round=2)
+                self._validate_values(session, keyspace_name, num_updates, validation_round=2)
 
-    def _validate_values(self, session, num_updates, validation_round):
+    def _validate_values(self, session, keyspace_name, num_updates, validation_round):
         # check values of non-counter tables
         for cf in ('test', 'test_clustering'):
-            rows = list(session.execute("SELECT * FROM %s" % (cf,)))
+            rows = list(session.execute("SELECT * FROM %s.%s" % (keyspace_name, cf)))
 
             # one row gets deleted each validation round
             assert 100 - (validation_round + 1) == len(rows)
@@ -131,7 +132,7 @@ class TestGlobalRowKeyCache(Tester):
                 assert expected_value == row.v2
 
         # check values of counter tables
-        rows = list(session.execute("SELECT * FROM test_counter"))
+        rows = list(session.execute("SELECT * FROM %s.test_counter" % keyspace_name))
         assert 100 == len(rows)
         for i, row in enumerate(sorted(rows)):
             assert i == row.k
@@ -143,7 +144,7 @@ class TestGlobalRowKeyCache(Tester):
 
             assert expected_value == row.v1
 
-        rows = list(session.execute("SELECT * FROM test_counter_clustering"))
+        rows = list(session.execute("SELECT * FROM %s.test_counter_clustering" % keyspace_name))
         assert 100 == len(rows)
         for i, row in enumerate(sorted(rows)):
             assert i == row.k
