@@ -274,11 +274,11 @@ class TestRebuild(Tester):
         # ks1 will be rebuilt in node2
         create_ks(session, 'ks1', {'dc1': 1})
         create_cf(session, 'cf', columns={'c1': 'text', 'c2': 'text'})
-        insert_c1c2(session, n=keys, consistency=ConsistencyLevel.ALL)
+        insert_c1c2(session, ks='ks1', n=keys, consistency=ConsistencyLevel.ALL)
         # ks2 will not be rebuilt in node2
         create_ks(session, 'ks2', {'dc1': 1})
         create_cf(session, 'cf', columns={'c1': 'text', 'c2': 'text'})
-        insert_c1c2(session, n=keys, consistency=ConsistencyLevel.ALL)
+        insert_c1c2(session, ks='ks2', n=keys, consistency=ConsistencyLevel.ALL)
         session.shutdown()
 
         # Bootstraping a new node in dc2 with auto_bootstrap: false
