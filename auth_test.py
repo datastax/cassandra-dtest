@@ -1219,7 +1219,8 @@ class TestAuthRoles(AbstractTestAuth):
                 'roles_validity_in_ms': 0,
                 'num_tokens': 1
             })
-        fixture_dtest_setup.cluster.populate(1, debug=True).start(jvm_args=['-XX:-PerfDisableSharedMem'])
+        fixture_dtest_setup.cluster.populate(1, debug=True).start(jvm_args=['-XX:-PerfDisableSharedMem',
+                                                                       '-Dcassandra.role_password_update_min_interval_in_ms=0'])
         nodes = fixture_dtest_setup.cluster.nodelist()
         fixture_dtest_setup.superuser = fixture_dtest_setup.patient_exclusive_cql_connection(nodes[0], user='cassandra', password='cassandra')
 
