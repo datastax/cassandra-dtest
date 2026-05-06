@@ -1,4 +1,5 @@
 import os
+import socket
 import subprocess
 import time
 import hashlib
@@ -49,6 +50,42 @@ def retry_till_success(fun, *args, **kwargs):
                 time.sleep(0.25)
 
 
+def _ssl_store_san_extension():
+    """
+    Builds the keytool subjectAltName extension used by generated test certificates.
+
+    JMX/RMI may advertise the container/host IP instead of the nodetool host argument
+    (for example, nodetool is invoked with -h localhost but the RMI stub points at
+    172.17.x.x in Docker). Include the local host addresses so hostname verification
+    succeeds in those environments too.
+    """
+    names = ['dns:localhost']
+    ips = ['127.0.0.1']
+
+    def add_ip(ip):
+        if ip and ip not in ips and not ip.startswith('127.') and ip != '0.0.0.0':
+            ips.append(ip)
+
+    try:
+        hostname = socket.gethostname()
+        if hostname and hostname not in ('localhost', 'localhost.localdomain'):
+            names.append('dns:{0}'.format(hostname))
+        for family, _, _, _, sockaddr in socket.getaddrinfo(hostname, None):
+            if family == socket.AF_INET:
+                add_ip(sockaddr[0])
+    except socket.error:
+        logger.debug("Unable to resolve local hostname for SSL SAN generation", exc_info=True)
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(('8.8.8.8', 80))
+            add_ip(s.getsockname()[0])
+    except socket.error:
+        logger.debug("Unable to determine outbound IP for SSL SAN generation", exc_info=True)
+
+    return 'san={0}'.format(','.join(names + ['ip:{0}'.format(ip) for ip in ips]))
+
+
 def generate_ssl_stores(base_dir, passphrase='cassandra'):
     """
     Util for generating ssl stores using java keytool -- nondestructive method if stores already exist this method is
@@ -69,7 +106,7 @@ def generate_ssl_stores(base_dir, passphrase='cassandra'):
     subprocess.check_call(['keytool', '-genkeypair', '-alias', 'ccm_node', '-keyalg', 'RSA', '-validity', '365',
                            '-keystore', os.path.join(base_dir, 'keystore.jks'), '-storepass', passphrase,
                            '-dname', 'cn=Cassandra Node,ou=CCMnode,o=DataStax,c=US', '-keypass', passphrase,
-                           '-ext', 'san=dns:localhost,ip:127.0.0.1'])
+                           '-ext', _ssl_store_san_extension()])
     logger.debug("exporting cert from keystore.jks in [{0}]".format(base_dir))
     subprocess.check_call(['keytool', '-export', '-rfc', '-alias', 'ccm_node',
                            '-keystore', os.path.join(base_dir, 'keystore.jks'),
