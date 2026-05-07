@@ -13,7 +13,9 @@ from cassandra import ConsistencyLevel as CL
 from tools.jmxutils import (JolokiaAgent, make_mbean)
 from tools.misc import add_skip
 from .upgrade_base import UpgradeTester
-from .upgrade_manifest import build_upgrade_pairs, RUN_STATIC_UPGRADE_MATRIX
+from .upgrade_manifest import (build_upgrade_pairs, RUN_STATIC_UPGRADE_MATRIX,
+                               CASSANDRA_4_1, CASSANDRA_5_0, CASSANDRA_5_1,
+                               CC4, CC5, HCD_1, HCD_2)
 
 
 since = pytest.mark.since
@@ -79,7 +81,13 @@ class TestForRegressions(UpgradeTester):
         """
         cluster = self.cluster
         cluster.set_datadir_count(1)  # we want the same prefix for all sstables
-        session = self.prepare()
+
+        extra_config_options = None
+        uuid_sstable_id_families = (CASSANDRA_4_1, CASSANDRA_5_0, CASSANDRA_5_1, CC4, CC5, HCD_1, HCD_2)
+        if self.UPGRADE_PATH.starting_meta.family in uuid_sstable_id_families:
+            extra_config_options = {'uuid_sstable_identifiers_enabled': False}
+
+        session = self.prepare(extra_config_options=extra_config_options)
         session.execute("CREATE KEYSPACE test13294 WITH replication={'class':'SimpleStrategy', 'replication_factor': 2};")
         session.execute("CREATE TABLE test13294.t (id int PRIMARY KEY, d int) WITH compaction = {'class': 'SizeTieredCompactionStrategy','enabled':'false'}")
         for x in range(0, 5):
