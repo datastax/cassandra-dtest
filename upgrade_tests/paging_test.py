@@ -1488,6 +1488,7 @@ class TestPagingWithDeletions(BasePagingTester, PageAssertionMixin):
         self.fixture_dtest_setup.allow_log_errors = True
         cursor = self.prepare(
             extra_config_options={'tombstone_failure_threshold': 500,
+                                  'tombstone_warn_threshold': 100,
                                   'read_request_timeout_in_ms': 1000,
                                   'request_timeout_in_ms': 1000,
                                   'range_request_timeout_in_ms': 1000})
