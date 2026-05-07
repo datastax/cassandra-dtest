@@ -38,8 +38,15 @@ logger = logging.getLogger(__name__)
 
 class TestCQL(UpgradeTester):
 
+    @staticmethod
+    def _family_is_40_or_greater(family):
+        return LooseVersion(family.split('-')[0]) >= CASSANDRA_4_0
+
     def is_40_or_greater(self):
-        return LooseVersion(self.UPGRADE_PATH.upgrade_meta.family) >= CASSANDRA_4_0
+        return self._family_is_40_or_greater(self.UPGRADE_PATH.upgrade_meta.family)
+
+    def starting_version_is_40_or_greater(self):
+        return self._family_is_40_or_greater(self.UPGRADE_PATH.starting_meta.family)
 
     def test_static_cf(self):
         """ Test static CF syntax """
@@ -5514,7 +5521,7 @@ class TestCQL(UpgradeTester):
         cursor.execute("CREATE KEYSPACE foo WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}")
         cursor.execute("CREATE TABLE foo.test1 (k int, t int, v int, PRIMARY KEY(k, t))")
 
-        if self.is_40_or_greater():
+        if self.starting_version_is_40_or_greater():
             cursor.execute("""
                 CREATE MATERIALIZED VIEW foo.view1
                 AS SELECT * FROM foo.test1
