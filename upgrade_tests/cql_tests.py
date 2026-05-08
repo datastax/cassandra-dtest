@@ -29,7 +29,7 @@ from tools.assertions import (assert_all, assert_invalid, assert_length_equal,
 from tools.data import rows_to_list
 from tools.misc import add_skip
 from .upgrade_base import UpgradeTester
-from .upgrade_manifest import build_upgrade_pairs, CASSANDRA_4_0, CASSANDRA_4_1, RUN_STATIC_UPGRADE_MATRIX
+from .upgrade_manifest import build_upgrade_pairs, CASSANDRA_4_0, CASSANDRA_4_1, CC4, RUN_STATIC_UPGRADE_MATRIX
 
 
 since = pytest.mark.since
@@ -2459,8 +2459,14 @@ class TestCQL(UpgradeTester):
 
         for is_upgraded, cursor in self.do_upgrade(cursor):
             logger.debug("Querying {} node".format("upgraded" if is_upgraded else "old"))
-            assert_invalid(cursor, "SELECT ttl(l) FROM test WHERE k = 0")
-            assert_invalid(cursor, "SELECT writetime(l) FROM test WHERE k = 0")
+            if is_upgraded and self.UPGRADE_PATH.upgrade_meta.family == CC4:
+                # CASSANDRA-8877 is backported in CC4 even though its version
+                # family sorts below the @since max_version ('4.1').
+                assert_none(cursor, "SELECT ttl(l) FROM test WHERE k = 0")
+                assert_none(cursor, "SELECT writetime(l) FROM test WHERE k = 0")
+            else:
+                assert_invalid(cursor, "SELECT ttl(l) FROM test WHERE k = 0")
+                assert_invalid(cursor, "SELECT writetime(l) FROM test WHERE k = 0")
 
     def test_composite_partition_key_validation(self):
         """
