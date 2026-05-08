@@ -135,12 +135,7 @@ class TestDowngrade(Tester):
         logger.debug('Creating cluster (%s)' % self.test_version_metas[0].version)
         cluster.populate(3)
 
-        # Start CC5 in CC_4 compatibility mode. FIXME: this shouldn't be needed after CNDB-16865
-        cluster.set_configuration_options(values={'storage_compatibility_mode': 'CC_4'})
-
-        [node.start(use_jna=True, wait_for_binary_proto=True,
-                    jvm_args=['-Dcassandra.test.storage_compatibility_mode=CC_4'])
-         for node in cluster.nodelist()]
+        [node.start(use_jna=True, wait_for_binary_proto=True) for node in cluster.nodelist()]
 
         for i, node in enumerate(cluster.nodelist(), 1):
             setattr(self, 'node' + str(i), node)
