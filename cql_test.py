@@ -35,7 +35,7 @@ class CQLTester(Tester):
 
     def prepare(self, ordered=False, create_keyspace=True, use_cache=False,
                 nodes=1, rf=1, protocol_version=None, user=None, password=None,
-                start_rpc=False, **kwargs):
+                start_rpc=False, jvm_args=None, **kwargs):
         cluster = self.cluster
 
         if ordered:
@@ -54,7 +54,7 @@ class CQLTester(Tester):
             cluster.set_configuration_options(values=config)
 
         if not cluster.nodelist():
-            cluster.populate(nodes).start()
+            cluster.populate(nodes).start(jvm_args=jvm_args)
         node1 = cluster.nodelist()[0]
 
         session = self.patient_cql_connection(node1, protocol_version=protocol_version, user=user, password=password)
@@ -248,7 +248,8 @@ class TestCQL(CQLTester):
         - DROP that user
         # TODO list users after each to make sure each statement works
         """
-        session = self.prepare(user='cassandra', password='cassandra')
+        session = self.prepare(user='cassandra', password='cassandra',
+                               jvm_args=['-Dcassandra.role_password_update_min_interval_in_ms=0'])
         node1 = self.cluster.nodelist()[0]
 
         def get_usernames():
