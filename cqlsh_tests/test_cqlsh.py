@@ -1220,7 +1220,7 @@ CREATE TYPE test.address_type (
             AND transactional_migration_from = 'none'
             AND speculative_retry = '99p';
         """ % compaction
-        elif self.cluster.version() >= LooseVersion('4.2'):
+        elif self.cluster.version() >= LooseVersion('4.2') and not self.is_cc4():
             compaction = self.get_cc_compaction() if self.is_cc5() else (
                 "AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', "
                 "'max_threshold': '32', 'min_threshold': '4'}")
@@ -1246,7 +1246,7 @@ CREATE TYPE test.address_type (
             AND read_repair = 'BLOCKING'
             AND speculative_retry = '99p';
         """ % compaction
-        elif self.cluster.version() >= LooseVersion('4.1'):
+        elif self.cluster.version() >= LooseVersion('4.1') and not self.is_cc4():
             create_table += """
         ) WITH CLUSTERING ORDER BY (col ASC)
             AND additional_write_policy = '99p'
@@ -1391,7 +1391,7 @@ CREATE TYPE test.address_type (
             AND transactional_migration_from = 'none'
             AND speculative_retry = '99p';
         """ % compaction
-        elif self.cluster.version() >= LooseVersion('4.2'):
+        elif self.cluster.version() >= LooseVersion('4.2') and not self.is_cc4():
             compaction = self.get_cc_compaction() if self.is_cc5() else (
                 "AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', "
                 "'max_threshold': '32', 'min_threshold': '4'}")
@@ -1421,7 +1421,7 @@ CREATE TYPE test.address_type (
             AND read_repair = 'BLOCKING'
             AND speculative_retry = '99p';
         """ % compaction
-        elif self.cluster.version() >= LooseVersion('4.1'):
+        elif self.cluster.version() >= LooseVersion('4.1') and not self.is_cc4():
             create_table = """
         CREATE TABLE test.users (
             userid text PRIMARY KEY,
@@ -1562,7 +1562,7 @@ CREATE TYPE test.address_type (
 
 
     def get_users_by_state_mv_output(self):
-        if self.cluster.version() >= LooseVersion('4.2'):
+        if self.cluster.version() >= LooseVersion('4.2') and not self.is_cc4():
             compaction = self.get_cc_compaction() if self.is_cc5() else (
                 "AND compaction = {'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', "
                 "'max_threshold': '32', 'min_threshold': '4'}")
@@ -1592,7 +1592,7 @@ CREATE TYPE test.address_type (
                 AND read_repair = 'BLOCKING'
                 AND speculative_retry = '99p';
                """ % compaction
-        elif self.cluster.version() >= LooseVersion('4.1'):
+        elif self.cluster.version() >= LooseVersion('4.1') and not self.is_cc4():
             return """
                 CREATE MATERIALIZED VIEW test.users_by_state AS
                 SELECT *

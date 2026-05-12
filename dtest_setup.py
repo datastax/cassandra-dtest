@@ -390,7 +390,9 @@ class DTestSetup(object):
         If no nodes in the cluster to check for is_converged_core() then we just assume it is converged core.
         """
         return ((0 == len(self.cluster.nodelist()) or self.cluster.nodelist()[0].is_converged_core())
-                and self.cluster.version() >= LooseVersion('4.0') and self.cluster.version() < LooseVersion('5.0'))
+                and self.cluster.version() >= LooseVersion('4.0')
+                and (self.cluster.version() < LooseVersion('5.0')
+                     or os.environ.get('TEST_STORAGE_COMPATIBILITY_MODE') == 'HCD_1'))
 
     def is_cc5(self):
         """ Is this CC5
