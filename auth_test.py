@@ -1,3 +1,4 @@
+import os
 import random
 import string
 import time
@@ -23,6 +24,20 @@ from tools.misc import ImmutableMapping
 
 since = pytest.mark.since
 logger = logging.getLogger(__name__)
+
+ROLE_PASSWORD_UPDATE_MIN_INTERVAL_PROPERTY = 'cassandra.role_password_update_min_interval_in_ms'
+
+
+def disable_role_password_update_rate_limit(cluster):
+    # Cassandra 5.0+ rate-limits password updates by default, but these auth
+    # dtests often create a role and then alter its password immediately while
+    # testing unrelated authorization behavior. Replace any existing setting to
+    # avoid passing the same -D option multiple times.
+    jvm_extra_opts = os.environ.get('JVM_EXTRA_OPTS', '').split()
+    jvm_extra_opts = [opt for opt in jvm_extra_opts
+                      if not opt.startswith('-D{}='.format(ROLE_PASSWORD_UPDATE_MIN_INTERVAL_PROPERTY))]
+    jvm_extra_opts.append('-D{}=0'.format(ROLE_PASSWORD_UPDATE_MIN_INTERVAL_PROPERTY))
+    cluster.set_environment_variable('JVM_EXTRA_OPTS', ' '.join(jvm_extra_opts))
 
 
 class AbstractTestAuth(Tester):
@@ -1161,6 +1176,8 @@ class TestAuth(AbstractTestAuth):
             config['enable_materialized_views'] = 'true'
         if self.dtest_config.cassandra_version_from_build >= '4.0':
             config['network_authorizer'] = 'org.apache.cassandra.auth.CassandraNetworkAuthorizer'
+        if self.dtest_config.cassandra_version_from_build >= '5.0':
+            disable_role_password_update_rate_limit(self.cluster)
         self.cluster.set_configuration_options(values=config)
         self.cluster.populate(nodes).start()
 
@@ -1219,8 +1236,9 @@ class TestAuthRoles(AbstractTestAuth):
                 'roles_validity_in_ms': 0,
                 'num_tokens': 1
             })
-        fixture_dtest_setup.cluster.populate(1, debug=True).start(jvm_args=['-XX:-PerfDisableSharedMem',
-                                                                       '-Dcassandra.role_password_update_min_interval_in_ms=0'])
+        if fixture_dtest_setup.dtest_config.cassandra_version_from_build >= '5.0':
+            disable_role_password_update_rate_limit(fixture_dtest_setup.cluster)
+        fixture_dtest_setup.cluster.populate(1, debug=True).start(jvm_args=['-XX:-PerfDisableSharedMem'])
         nodes = fixture_dtest_setup.cluster.nodelist()
         fixture_dtest_setup.superuser = fixture_dtest_setup.patient_exclusive_cql_connection(nodes[0], user='cassandra', password='cassandra')
 
