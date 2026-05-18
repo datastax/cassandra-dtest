@@ -382,7 +382,9 @@ class DTestSetup(object):
         return cluster_version >= LooseVersion('4.0')
 
     def supports_cc4_guardrails(self):
-        return self.is_cc4()
+        return ((0 == len(self.cluster.nodelist()) or self.cluster.nodelist()[0].is_converged_core())
+                and self.cluster.version() >= LooseVersion('4.0')
+                and self.cluster.version() < LooseVersion('5.0'))
 
     def is_cc4(self):
         """ Is this CC4
