@@ -872,10 +872,10 @@ VALUES (4, blobAsInt(0x), '', blobAsBigint(0x), 0x, blobAsBoolean(0x), blobAsDec
         self.execute(
             cql="""
                 CREATE KEYSPACE test WITH REPLICATION = {'class' : 'SimpleStrategy', 'replication_factor' : 1};
-                CREATE TABLE test.users ( userid text PRIMARY KEY, firstname text, lastname text, age int);
+                CREATE TABLE test.users ( userid text PRIMARY KEY, firstname text, lastname text, age int) WITH compression = {'class':'LZ4Compressor'};
                 CREATE INDEX myindex ON test.users (age);
                 CREATE INDEX "QuotedNameIndex" on test.users (firstName);
-                CREATE TABLE test.test (id int, col int, val text, PRIMARY KEY(id, col));
+                CREATE TABLE test.test (id int, col int, val text, PRIMARY KEY(id, col)) WITH compression = {'class':'LZ4Compressor'};
                 CREATE INDEX ON test.test (col);
                 CREATE INDEX ON test.test (val)
                 """)
@@ -1147,6 +1147,7 @@ CREATE TYPE test.address_type (
                 session_token varchar, state varchar, birth_year bigint, PRIMARY KEY (username));
                 CREATE MATERIALIZED VIEW test.users_by_state AS
                 SELECT * FROM users WHERE STATE IS NOT NULL AND username IS NOT NULL PRIMARY KEY (state, username)
+                    WITH compression = { 'class': 'AdaptiveCompressor' }
                 """)
 
         output = self.execute(cql="DESCRIBE KEYSPACE test")
