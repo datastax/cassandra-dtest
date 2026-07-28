@@ -210,7 +210,7 @@ indev_3_11_x = VersionMeta(name='indev_3_11_x', family=CASSANDRA_3_11, variant='
 current_3_11_x = VersionMeta(name='current_3_11_x', family=CASSANDRA_3_11, variant='current', version='3.11.19', min_proto_v=3, max_proto_v=4, java_versions=(8,))
 
 indev_dse_5_1 = VersionMeta(name='indev_dse_5_1', family=DSE_5_1, variant='indev', version='alias:bdp/5.1-dev', min_proto_v=3, max_proto_v=4, java_versions=(8,)) # FIXME also support proto_v=65 ("dse-v1")
-current_dse_5_1 = VersionMeta(name='current_dse_5_1', family=DSE_5_1, variant='current', version='5.1.49', min_proto_v=3, max_proto_v=4, java_versions=(8,)) # FIXME also support proto_v=65 ("dse-v1")
+current_dse_5_1 = VersionMeta(name='current_dse_5_1', family=DSE_5_1, variant='current', version='5.1.51', min_proto_v=3, max_proto_v=4, java_versions=(8,)) # FIXME also support proto_v=65 ("dse-v1")
 
 indev_4_0_x = VersionMeta(name='indev_4_0_x', family=CASSANDRA_4_0, variant='indev', version='github:apache/cassandra-4.0', min_proto_v=3, max_proto_v=4, java_versions=(8,11))
 current_4_0_x = VersionMeta(name='current_4_0_x', family=CASSANDRA_4_0, variant='current', version='4.0.19', min_proto_v=4, max_proto_v=5, java_versions=(8,11))
