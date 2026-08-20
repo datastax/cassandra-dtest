@@ -4,7 +4,7 @@ import uuid
 import pytest
 import logging
 
-from cassandra import ConsistencyLevel
+from cassandra import ConsistencyLevel, WriteFailure
 from cassandra.query import SimpleStatement
 
 from tools.assertions import assert_invalid, assert_length_equal, assert_one
@@ -82,7 +82,6 @@ class TestCounters(Tester):
         session = self.patient_cql_connection(node1, consistency_level=ConsistencyLevel.ALL)
         assert_one(session, "SELECT COUNT(*) FROM test.test", [1000])
 
-    @pytest.mark.skip("see CNDB-12588")
     @pytest.mark.vnodes
     @since('3.0')
     def test_counter_leader_with_partial_view(self):
@@ -117,20 +116,49 @@ class TestCounters(Tester):
         # nodes that are alive
         nodes[1].stop(wait=True, wait_other_notice=False)
         nodes[1].update_startup_byteman_script(mk_bman_path('gossip_alive_callback_sleep.btm'))
+        node2_restart_mark = nodes[1].mark_log()
         nodes[1].start(no_wait=True, wait_other_notice=False)
 
-        # Until node 2 is fully alive try to force other nodes to pick him as mutation leader.
-        # If CASSANDRA-13043 is fixed, they will not. Otherwise they will do, but since we are slowing down how
-        # fast node 2 updates the list of nodes that are alive, it will just have a partial view on the cluster
-        # and thus will raise an 'UnavailableException' exception.
+        # A counter leader can now be selected as soon as the failure detector considers it alive; RPC readiness
+        # is deliberately not part of leader selection (CNDB-12588). While node 2 still has a partial view, a
+        # forwarded mutation can consequently fail with UnavailableException, reported to the client as a
+        # WriteFailure. That failure is expected during this startup window, as is its ERROR log on node 2.
+        self.fixture_dtest_setup.ignore_log_patterns = list(self.fixture_dtest_setup.ignore_log_patterns) + [
+            r'.*CounterMutationStage.*Uncaught exception on thread.*'
+        ]
+
         nb_attempts = 50000
+        successful_writes = 0
+        startup_failures = 0
         for i in range(0, nb_attempts):
-            # Change the name of the counter for the sake of randomization
+            # Change the name of the counter for the sake of randomization.
             q = SimpleStatement(
                 query_string="UPDATE ks.cf SET c = c + 1 WHERE key = 'counter_%d'" % i,
                 consistency_level=ConsistencyLevel.QUORUM
             )
-            session.execute(q)
+            try:
+                session.execute(q)
+                successful_writes += 1
+            except WriteFailure:
+                startup_failures += 1
+
+        logger.info("Counter writes while node 2 started: %d succeeded, %d failed transiently",
+                    successful_writes, startup_failures)
+
+        # Once node 2 has completed startup, counter writes must recover.
+        nodes[1].watch_log_for("Startup complete", from_mark=node2_restart_mark, timeout=120)
+        recovery_deadline = time.time() + 60
+        while True:
+            try:
+                session.execute(SimpleStatement(
+                    query_string="UPDATE ks.cf SET c = c + 1 WHERE key = 'counter_after_startup'",
+                    consistency_level=ConsistencyLevel.QUORUM
+                ))
+                break
+            except WriteFailure:
+                if time.time() >= recovery_deadline:
+                    raise
+                time.sleep(1)
 
     def test_simple_increment(self):
         """ Simple incrementation test (Created for #3465, that wasn't a bug) """
