@@ -82,9 +82,21 @@ class TestForRegressions(UpgradeTester):
         cluster = self.cluster
         cluster.set_datadir_count(1)  # we want the same prefix for all sstables
 
+        # This test requires UUID sstable identifiers to be disabled.
+        #
+        # CC4 added the feature as 'enable_uuid_sstable_identifiers' before it was added to Apache C* 4.1 as 'uuid_sstable_identifiers_enabled'
+        #
+        # CC4: 'enable_uuid_sstable_identifiers', default value 'true'
+        # Apache C* 4.1+: 'uuid_sstable_identifiers_enabled', default value 'false'
+        # CC5 (inherits from Apache C* 5.0): 'uuid_sstable_identifiers_enabled', default value 'true'
+        enable_uuid_sstable_id_families = (CC4, HCD_1)
+        uuid_sstable_id_enabled_families = (CASSANDRA_4_1, CASSANDRA_5_0, CASSANDRA_5_1, CC5, HCD_2)
+
+        # Disable UUID sstable identifiers in starting version config options
         extra_config_options = None
-        uuid_sstable_id_families = (CASSANDRA_4_1, CASSANDRA_5_0, CASSANDRA_5_1, CC4, CC5, HCD_1, HCD_2)
-        if self.UPGRADE_PATH.starting_meta.family in uuid_sstable_id_families:
+        if self.UPGRADE_PATH.starting_meta.family in enable_uuid_sstable_id_families:
+            extra_config_options = {'enable_uuid_sstable_identifiers': False}
+        elif self.UPGRADE_PATH.starting_meta.family in uuid_sstable_id_enabled_families:
             extra_config_options = {'uuid_sstable_identifiers_enabled': False}
 
         session = self.prepare(extra_config_options=extra_config_options)
@@ -113,6 +125,31 @@ class TestForRegressions(UpgradeTester):
                         first_sstable = new_filename  # we should compact this
                 mul = mul * 10
         node1.start()
+
+        # Disable UUID sstable identifiers in target version config options.
+        #
+        # The starting version's property was set in the cluster-level config by prepare(), and ccm
+        # re-applies cluster-level options on top of the target version's cassandra.yaml whenever it
+        # regenerates the yaml. Without intervention the starting version's property name (e.g. CC4's
+        # 'enable_uuid_sstable_identifiers') would be written into the target version's yaml.
+        #
+        # So set the options on node1 only (the node being upgraded). Node-level options take precedence
+        # over cluster-level ones, and a None value means the key is omitted from the generated yaml.
+        # This leaves the cluster config and the yaml of node2, which stays on the starting version, unchanged.
+        upgrade_config_options = {}
+        if self.UPGRADE_PATH.upgrade_meta.family in uuid_sstable_id_enabled_families:
+            upgrade_config_options = {
+                'uuid_sstable_identifiers_enabled': False,
+                'enable_uuid_sstable_identifiers': None  # omit the CC4-style key from the target yaml
+            }
+        elif self.UPGRADE_PATH.upgrade_meta.family in enable_uuid_sstable_id_families:
+            upgrade_config_options = {
+                'enable_uuid_sstable_identifiers': False,
+                'uuid_sstable_identifiers_enabled': None  # omit the CC5-style key from the target yaml
+            }
+
+        node1.set_configuration_options(values=upgrade_config_options)
+
         sessions = self.do_upgrade(session)
         checked = False
         for is_upgraded, cursor in sessions:
