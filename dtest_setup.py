@@ -515,7 +515,12 @@ class DTestSetup(object):
             values['corrupted_tombstone_strategy'] = 'exception'
 
         if self.cluster.cassandra_version() >= '5.0':
-            values['storage_compatibility_mode'] = os.environ.get('TEST_STORAGE_COMPATIBILITY_MODE', 'NONE')
+            mode = os.environ.get('TEST_STORAGE_COMPATIBILITY_MODE', 'NONE')
+            # 'HCD_1' exists only in converged-core (CC5/HCD) builds; Apache 5.0/trunk reject it
+            nodes = self.cluster.nodelist()
+            if mode == 'HCD_1' and nodes and not nodes[0].is_converged_core():
+                mode = 'NONE'
+            values['storage_compatibility_mode'] = mode
 
         if self.dtest_config.use_vnodes:
             self.cluster.set_configuration_options(values={'num_tokens': self.dtest_config.num_tokens})
