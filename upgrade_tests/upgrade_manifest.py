@@ -248,20 +248,14 @@ indev_trunk = VersionMeta(name='indev_trunk', family=TRUNK, variant='indev', ver
 #   2) Features exclusive to version B may not work until all nodes are running version B.
 #   3) Nodes upgraded to version B can read data stored by the predecessor version A, and from a data standpoint will function the same as if they always ran version B.
 #   4) If a new sstable format is present in version B, writes will occur in that format after upgrade. Running sstableupgrade on version B will proactively convert version A sstables to version B.
+# Cassandra 2.1, 2.2, 3.0 and 3.11 are end of life: their VersionMetas are kept for tests that reference them directly, but
+# they are no longer scheduled as upgrade sources.
 # TODO define new upgrade scenarios whenever Cassandra is branched
 MANIFEST = {
-    current_2_1_x: [indev_2_2_x, indev_3_0_x, indev_3_11_x],
-    current_2_2_x: [indev_2_2_x, indev_3_0_x, indev_3_11_x],
-    current_3_0_x: [indev_3_0_x, indev_3_11_x, indev_4_0_x, indev_cc4, indev_4_1_x],
-    current_3_11_x: [indev_3_11_x, indev_4_0_x, indev_cc4, indev_4_1_x],
     current_4_0_x:  [indev_4_0_x, indev_cc4, indev_4_1_x, indev_5_0_x, indev_cc5, indev_trunk],
     current_4_1_x:  [indev_4_1_x, indev_5_0_x, indev_cc5, indev_trunk],
     current_5_0_x:  [indev_5_0_x, indev_cc5, indev_trunk],
 
-    indev_2_1_x: [indev_2_2_x, indev_3_0_x, indev_3_11_x],
-    indev_2_2_x: [indev_3_0_x, indev_3_11_x],
-    indev_3_0_x: [indev_3_11_x, indev_4_0_x, indev_cc4, indev_4_1_x],
-    indev_3_11_x: [indev_4_0_x, indev_cc4, indev_4_1_x],
     indev_4_0_x:  [indev_cc4, indev_4_1_x, indev_5_0_x, indev_cc5, indev_trunk],
     indev_4_1_x:  [indev_5_0_x, indev_cc5, indev_trunk],
     indev_5_0_x:  [indev_cc5, indev_trunk],
